@@ -1,0 +1,44 @@
+void writeToFile(const Stats& s) {
+    std::ofstream out("stats.txt", std::ios::app);
+    if (!out) {
+        std::cerr << "could not open file stats.txt\n";
+        return;
+    }
+    out << s.piMean   << ","
+        << s.piStd    << ","
+        << s.time     << ","
+        << s.timeMean << ","
+        << s.timeStd  << ","
+        << s.fom      << "\n";
+    out.write(reinterpret_cast<const char*>(&s), sizeof(s));
+}
+
+std::vector<Stats> readFromFile() {
+    std::ifstream in("stats.txt");
+    std::vector<Stats> results;
+    if (!in) return results;
+
+    std::string line;
+    while (std::getline(in, line)) {
+        std::stringstream ss(line);
+        std::string method;
+        Stats s;
+        std::getline(ss, method, ',');
+        ss >> s.piMean;   ss.ignore();
+        ss >> s.piStd;    ss.ignore();
+        ss >> s.time;     ss.ignore();
+        ss >> s.timeMean; ss.ignore();
+        ss >> s.timeStd;  ss.ignore();
+        ss >> s.fom;
+        results.push_back(s);
+    }
+    return results;
+}
+
+void statisticalTest() {
+    std::vector<Stats> data = readFromFile();
+    int n = data.size();
+    g2
+
+    float JB = (n/6)*g1^2 + (n/24)*(g2-3)^2;
+}
