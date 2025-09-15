@@ -34,6 +34,9 @@
 The best prediction result was achieved (of the ones tested) with a needle length of 2, 10 000 000 trials and 10 iterations. This returned a FOM of around 400k. 
 On a M2 MacBook, this function took 12.9 seconds to run. 
 
+## Time usage
+Assignment 1 : 5h
+
 ## Misc
 Compiled with
  >g++ -std=c++20 -g -Wall -Wextra -o mc mc.cpp
