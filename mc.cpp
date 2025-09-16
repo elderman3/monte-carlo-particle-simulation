@@ -122,8 +122,8 @@ int main() {
                     circleResult[i] = timing(circleSampling, iter);
                 }
                 Stats statsCircle = statistics(circleResult);
-                statsCircle.iterations = iter;
-                statsCircle.trials = repeats;
+                statsCircle.iterations = repeats;
+                statsCircle.trials = iter;
                 statsCircle.length = length;
                 printf("Circle Function Statistics\n");
                 printStats(statsCircle);
@@ -133,8 +133,8 @@ int main() {
                     buffonResult[i] = timing(buffonNeedle, iter, length);
                 }
                 Stats statsBuffon = statistics(buffonResult);
-                statsBuffon.iterations = iter;
-                statsBuffon.trials = repeats;
+                statsBuffon.iterations = repeats;
+                statsBuffon.trials = iter;
                 statsBuffon.length = length;
                 printf("Buffon Function Statistics\n");
                 printStats(statsBuffon);
