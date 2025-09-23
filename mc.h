@@ -1,4 +1,18 @@
 #include <vector>
+#include <utility>
+#include <string>
+
+typedef struct Material{
+    std::string sym;
+    int z;
+    int a;
+    double aw;
+    int T;
+    double rho;
+    double proportion; // molar proportion of composition
+    std::vector<std::pair<double, double>> neutrons;
+    std::map<int, std::pair<double, std::vector<std::pair<double,double>>>> mt;
+} Material;
 
 typedef struct Result{
     double runningTime;
