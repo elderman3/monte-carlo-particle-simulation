@@ -11,8 +11,20 @@ typedef struct Material{
     double rho;
     double proportion; // molar proportion of composition
     std::vector<std::pair<double, double>> neutrons;
-    std::map<int, std::pair<double, std::vector<std::pair<double,double>>>> mt;
+    std::map<int, std::vector<std::pair<double,double>>> mt;
+    std::map<int, double> Qvals;
 } Material;
+
+typedef struct Collisions{
+    std::vector<int> num;
+    std::vector<double> sumEnergy;
+} Collisions;
+
+typedef struct Neutron{
+    double energy;
+    int collisions = 0;
+
+} Neutron;
 
 typedef struct Result{
     double runningTime;
@@ -34,18 +46,5 @@ typedef struct Stats{
 } Stats;
 
 double randomVal(float min = 0.f, float max = 1.f);
-
-float circleSampling(int iter, float l = 0.f);
-
-float buffonNeedle(int iter, float length);
-
-Result timing(float (*f)(int, float), int iter, float length = 0.f);
-
-Stats statistics(const std::vector<Result> inputV);
-
-void printStats(const Stats& s);
-
-
-
 
 

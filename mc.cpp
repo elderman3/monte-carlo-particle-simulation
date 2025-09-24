@@ -15,6 +15,8 @@ namespace plt = matplotlibcpp;
 
 constexpr double PI_2 = 1.57079632679489661923;
 
+
+
 double randomVal(float min, float max) {
     static thread_local std::mt19937 gen(std::random_device{}()); // engine
     std::uniform_real_distribution<double> dist(min, max);        // [0,1)
