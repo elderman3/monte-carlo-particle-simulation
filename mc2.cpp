@@ -10,6 +10,7 @@
 #include <cmath>
 #include <map>
 #include <array>
+#include <chrono>
 
 
 constexpr double PI_2 = 1.57079632679489661923;
@@ -301,7 +302,31 @@ inline void recordCollision(Collisions& c, int collIdx, double E) {
     c.sumEnergy[collIdx] += E;
 }
 
-SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, int inelastic, std::vector<Material> mats, std::vector<double> x) {
+inline double massRatioA(const Material& m) {
+    return (m.a > 0 ? double(m.a) : std::max(1, m.z));
+}
+
+inline double elasticEnergyStationary(double En, double A) {
+    const double a = (A-1.0)/(A+1.0);
+    const double alpha = a*a;
+    const double u = randomVal();
+    return (alpha + (1.0 - alpha)*u) * En;
+}
+
+inline double inelasticEnergyStationary(double En, double A, double Delta) {
+    if (Delta <= 0.0) return elasticEnergyStationary(En, A);
+    if (En <= Delta)  return 0.0;
+    const double Ein = En - Delta;
+    return elasticEnergyStationary(Ein, A);
+}
+
+inline double getDeltaE(const Material& m, double) {
+    auto it = m.Qvals.find(4);
+    if (it != m.Qvals.end()) return std::abs(it->second);
+    return 0.5;
+}
+
+SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, int inelastic, std::vector<Material> mats) {
     // Data collection
     std::vector<Collisions> collisions(iterations);
     for (int i = 0; i < iterations; ++i)
@@ -357,11 +382,16 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
                 elasticScatter(E, mats[imat].aw, mats[imat].T, 2e-4, Eout);
                 n.energy = Eout;
                 recordCollision(col, n.collisions, E);
+                continue;
             }
             if (mtChosen == 4) {
+                const double A     = massRatioA(mats[imat]);
+                const double Delta = getDeltaE(mats[imat], E);
+                const double Eout  = inelasticEnergyStationary(E, A, Delta);
 
-                
                 recordCollision(col, n.collisions, E);
+                if (Eout > 0.0) { n.energy = Eout; bank.emplace_back(n); } // requeue if still alive
+                continue;
             }
             if (mtChosen == 18) { // Fission                
                 const int nEmit = sampleMultiplicity(valueInterp(mats[imat].neutrons, E));
@@ -375,6 +405,7 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
                     Neutron neu = {Eout, 0};
                     bank.emplace_back(std::move(neu));
                 }
+                continue;
             }
             if (mtChosen == 102) continue;
             i++;
@@ -433,11 +464,112 @@ inline std::vector<double> computeColEnergy(const std::vector<Collisions>& cols)
     return avg;
 }
 
+inline std::string timePath() {
+    using clock = std::chrono::system_clock;
+    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
+                        clock::now().time_since_epoch()).count();
+    return "output/dOutFile_"std::to_string(secs) + ".csv";
+}
 
-// TODO: Reimplement Statistical methods for simulation data
-// TODO: Activate Inelastic Scattering function
-// TODO: Criticality detection tool
-// TODO: Write input.txt to perform analysis
+inline bool storeData(const std::vector<double>& data)
+{
+    std::ofstream os(timePath());
+    if (!os) return false;
+    os << std::scientific << std::setprecision(6);
+    for (size_t k = 0; k < data.size(); ++k)
+        os << k << "," << data[k] << "\n";
+    return true;
+}
+
+inline std::string mtLabel(int mt) {
+    switch (mt) {
+        case 2:   return "MT2  Elastic";
+        case 4:   return "MT4  Inelastic";
+        case 18:  return "MT18 Fission";
+        case 102: return "MT102 Capture";
+        default:  return "MT" + std::to_string(mt);
+    }
+}
+
+inline double calMeanF(std::vector<int> fNeutrons, int nNeutrons) {
+    double sum = 0;
+    for (int x : fNeutrons) sum += x;
+    return sum / static_cast<double>(nNeutrons); 
+}
+
+inline void printStatsOut(const StatsOut& S, const std::vector<std::string>& matNames, const std::vector<int>& MTs, std::ostream& os = std::cout) {
+    const size_t M = S.sum.size();
+    if (!M) { os << "(no data)\n"; return; }
+    const size_t R = S.sum[0].size();
+
+    std::vector<long long> rowTot(M,0), colTot(R,0);
+    long long grand = 0;
+    for (size_t i=0;i<M;++i)
+        for (size_t j=0;j<R;++j){
+            long long v = S.sum[i][j];
+            rowTot[i]+=v; colTot[j]+=v; grand+=v;
+        }
+    auto pct=[&](long long x){ return grand? 100.0*double(x)/double(grand) : 0.0; };
+
+    size_t wName = 4;
+    for (size_t i=0;i<std::min(M,matNames.size());++i) wName = std::max(wName, matNames[i].size());
+    std::vector<size_t> wCol(R, 14);
+    for (size_t j=0;j<R;++j){
+        wCol[j] = std::max(wCol[j], mtLabel(MTs[j]).size());
+        for (size_t i=0;i<M;++i){
+            if (S.sum[i][j]==0) continue;
+            std::ostringstream ss;
+            double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
+            ss << std::setprecision(3) << std::scientific << S.mean[i][j]
+               << " ± " << std::fixed << std::setprecision(1) << rPct << "% "
+               << "(" << S.sum[i][j] << ")";
+            wCol[j] = std::max<size_t>(wCol[j], ss.str().size());
+        }
+    }
+
+    os << "\n=== Statistics ===\n";
+    os << "Total events: " << grand << "\n";
+
+    os << "\n-- By reaction (counts) --\n";
+    for (size_t j=0;j<R;++j)
+        os << std::left << std::setw(int(wCol[j])) << mtLabel(MTs[j]) << "  "
+           << std::right << std::setw(10) << colTot[j] << "  "
+           << std::fixed << std::setprecision(2) << std::setw(6) << pct(colTot[j]) << "%\n";
+
+    os << "\n-- By material (counts) --\n";
+    for (size_t i=0;i<M;++i){
+        const std::string& name = (i<matNames.size()? matNames[i] : ("mat"+std::to_string(i)));
+        os << std::left << std::setw(int(wName)) << name << "  "
+           << std::right << std::setw(10) << rowTot[i] << "  "
+           << std::fixed << std::setprecision(2) << std::setw(6) << pct(rowTot[i]) << "%\n";
+    }
+
+    os << "\n-- Matrix: mean ± relErr% (count) --\n";
+    os << std::left << std::setw(int(wName)) << "" << "  ";
+    for (size_t j=0;j<R;++j)
+        os << std::left << std::setw(int(wCol[j])) << mtLabel(MTs[j]) << "  ";
+    os << "\n";
+
+    for (size_t i=0;i<M;++i){
+        const std::string& name = (i<matNames.size()? matNames[i] : ("mat"+std::to_string(i)));
+        os << std::left << std::setw(int(wName)) << name << "  ";
+        for (size_t j=0;j<R;++j){
+            if (S.sum[i][j]==0) {
+                os << std::left << std::setw(int(wCol[j])) << "-" << "  ";
+            } else {
+                double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
+                std::ostringstream cell;
+                cell << std::setprecision(3) << std::scientific << S.mean[i][j]
+                     << " ± " << std::fixed << std::setprecision(1) << rPct << "% "
+                     << "(" << S.sum[i][j] << ")";
+                os << std::left << std::setw(int(wCol[j])) << cell.str() << "  ";
+            }
+        }
+        os << "\n";
+    }
+}
+
+
 // TODO: Create plotting functions for relevant cases M3,O3
 // TODO: Collect necessary variables for four-factor-formula
 // TODO: Time dependence
@@ -484,27 +616,39 @@ int main() {
                     mats.push_back(std::move(mat));
                     }
                 }
-            fillData(mats, x, inelastic);
-            SimRes simRes = simulation(nNeutrons, energy, iterations, maxSteps, inelastic, mats, x);
-            StatsOut matrixStats = computeStats(simRes.statM);
-            std::vector<double> collisionEnergy = computeColEnergy(simRes.collisions);
+                std::vector<std::string> matNames; matNames.reserve(mats.size());
+                for (auto& m : mats) matNames.push_back(m.sym);
+                fillData(mats, x, inelastic);
 
-
-
-            // Simulation is used for 
-            // M3 - H1 and H2 slowing down neutrons - plot neutron energy/collision number
-            // Multiplication of neutrons in Uranium 
-            
-
-            // Simulation must record everything, bonus 1 and 2 are easyish?
-
-
-            // Calculate macroscopic corss section vector for all x
-
-
-            // call simulation and other end things
+                SimRes simRes = simulation(nNeutrons, energy, iterations, maxSteps, inelastic, mats);
                 
+                StatsOut matrixStats = computeStats(simRes.statM);
+                std::vector<double> collisionEnergy = computeColEnergy(simRes.collisions);
+                double meanF = calMeanF(simRes.fNeutrons, nNeutrons);
 
+                printStatsOut(matrixStats, matNames, MTs);
+                printf("Average Neutrons %lf \n", meanF);
+                storeData(collisionEnergy);
+
+            } else if (std::strcmp(command, "criticality") == 0) {
+                int nNeutrons = 10000;
+                std::vector<double> meanFVals;
+                std::vector<Material> mats;
+                Material matU235, matU238;
+                matU235.rho = 19.1; matU238.rho = 19.1;
+                readMaterialBlock(std::ifstream materialdata("data/U235.dat"), matU235);
+                readMaterialBlock(std::ifstream materialdata("data/U238.dat"), matU238);
+                mats.push_back(std::move(matU235));
+                mats.push_back(std::move(matU238));
+
+                for (int i = 0; i < 101; ++i) {
+                    mats[0].proportion = (float) i / 100.f; 
+                    mats[1].proportion = (float) (100 - i) / 100.f;
+                    SimRes simRes = simulation(nNeutrons, 2, 10, 100000, 1, mats);
+                    double meanF = calMeanF(simRes.fNeutrons, nNeutrons);
+                    meanFVals[i] = meanF;
+                }
+                storeData(meanFVals);
             }
 
 
