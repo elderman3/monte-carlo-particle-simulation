@@ -8,10 +8,6 @@
 #include <chrono>
 #include <random>
 #include <cmath>
-#include "mathplotlibcpp.h"
-
-using namespace std;
-namespace plt = matplotlibcpp;
 
 constexpr double PI_2 = 1.57079632679489661923;
 

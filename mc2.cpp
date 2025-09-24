@@ -8,10 +8,9 @@
 #include <chrono>
 #include <random>
 #include <cmath>
-#include "mathplotlibcpp.h"
+#include <map>
+#include <array>
 
-using namespace std;
-namespace plt = matplotlibcpp;
 
 constexpr double PI_2 = 1.57079632679489661923;
 constexpr double kB = 8.617333262e-11;
@@ -203,37 +202,29 @@ inline double materialWeight(const Material& m, double E, const std::vector<int>
     return std::max(0.0, m.proportion * m.rho * micro);
 }
 
-inline void buildMaterialCum(const std::vector<Material>& mats, double E, const std::vector<int>& mts_total, std::vector<double>& cum, double& total) {
+inline void buildMaterialCum(const std::vector<Material>& mats, double E,
+                               const std::vector<int>& mts_total,
+                               std::vector<double>& cum, double& total) {
     cum.clear(); cum.reserve(mats.size());
     double run = 0.0;
-    for (const auto& m : mats) {
-        run += materialWeight(m, E, mts_total);
-        cum.push_back(run);
-    }
+    for (const auto& m : mats) { run += materialWeight(m, E, mts_total); cum.push_back(run); }
     total = run;
 }
 
-inline void buildReactionCumAll(const std::vector<Material>& mats, double E, const std::vector<int>& mts_sample, std::vector<std::vector<int>>& rxLabels, 
-                                std::vector<std::vector<double>>& rxCum, std::vector<double>& rxTotal) {
-    const size_t M = mats.size();
-    rxLabels.assign(M, {});
-    rxCum.assign(M, {});
-    rxTotal.assign(M, 0.0);
-
-    for (size_t imat = 0; imat < M; ++imat) {
-        const auto& m = mats[imat];
-        double run = 0.0;
-        rxLabels[imat].reserve(mts_sample.size());
-        rxCum[imat].reserve(mts_sample.size());
-        for (int mt : mts_sample) {
-            double w = interpMT(m.mt, mt, E);
-            if (w <= 0.0) continue;
-            run += w;
-            rxLabels[imat].push_back(mt);
-            rxCum[imat].push_back(run);
-        }
-        rxTotal[imat] = run;
+inline void buildReactionCum(const Material& m, double E,
+                               const std::vector<int>& mts_sample,
+                               std::vector<int>& labels,
+                               std::vector<double>& cum, double& total) {
+    labels.clear(); cum.clear();
+    double run = 0.0;
+    for (int mt : mts_sample) {
+        double w = interpMT(m.mt, mt, E);
+        if (w <= 0.0) continue;
+        run += w;
+        labels.push_back(mt);
+        cum.push_back(run);
     }
+    total = run;
 }
 
 inline int sampleMultiplicity(double nuBar) {
@@ -277,12 +268,12 @@ inline double sampleMaxwellE(double T) {
     return -T * ( (xi1*xi1) * std::log(xi3)/R + std::log(xi4) );
 }
 
-inline void elastic_scatter(double En, double A, double TK, double Efg, double& Eout)
+inline void elasticScatter(double En, double A, double TK, double Efg, double& Eout)
 {
     std::array<double,3> VL{0,0,0};
     const bool use_free_gas = (En < Efg && A <= 10.0);
     if (use_free_gas) {
-        const double T_mev = kB_MeV_per_K * TK;
+        const double T_mev = kB * TK;
         const double Et = sampleMaxwellE(T_mev);
         const double vmag = std::sqrt(std::max(0.0, 2.0*Et / A));
         VL = scale(iso_dir(), vmag);
@@ -301,51 +292,59 @@ inline void elastic_scatter(double En, double A, double TK, double Efg, double& 
     Eout = 0.5 * norm2(vLprime);
 }
 
-void simulation(int nNeutrons, double energy, int iterations, int maxSteps, int inelastic, std::vector<Material> mats, std::vector<double> x) {
+inline void recordCollision(Collisions& c, int collIdx, double E) {
+    if (collIdx >= (int)c.num.size()) {
+        c.num.resize(collIdx + 1, 0);
+        c.sumEnergy.resize(collIdx + 1, 0.0);
+    }
+    c.num[collIdx] += 1;
+    c.sumEnergy[collIdx] += E;
+}
+
+SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, int inelastic, std::vector<Material> mats, std::vector<double> x) {
     // Data collection
     std::vector<Collisions> collisions(iterations);
     for (int i = 0; i < iterations; ++i)
         collisions.emplace_back(Collisions());
     std::vector<int> fNeutrons(iterations, 0);
+
+    // Define modes of possible interaction
+    static const std::vector<int> MTs = {2, 18, 102};
+    if (inelastic) {
+        static const std::vector<int> MTs = {2, 4, 18, 102};
+    }
     std::vector<std::vector<std::vector<int>>> statM(
             iterations, std::vector<std::vector<int>>(mats.size(), std::vector<int>(MTs.size(), 0)));
 
-    // Define modes of possible interaction
-    if (inelastic) {
-        static const std::vector<int> MTs = {2, 4, 18, 102};
-    } else {
-        static const std::vector<int> MTs = {2, 18, 102};
-    }
-
-
     std::deque<Neutron> bank;
     std::vector<double> matCum;
-    std::vector<std::vector<int>> rxLabels;
-    std::vector<std::vector<double>> rxCum;
-    ble matTotal = 0.0, std::vector<double> rxTotal;
-    buildMaterialCum(mats, E, MTs, matCum, matTotal);
-    buildReactionCumAll(mats, energy, MTs, rxLabels, rxCum, rxTotal);
+    std::vector<int> rxLabels;
+    std::vector<double> rxCum;
+    double matTotal = 0.0, rxTotal = 0.0;
+
 
     for (int iter = 0; iter < iterations; ++iter) {
         bank.clear();
         // Init neutrons
-        for (int i = 0; i < nNeutros; ++i) bank.emplace_back(Neutron(energy, 0));
+        for (int i = 0; i < nNeutrons; ++i) {
+            Neutron n = {energy, 0};
+            bank.emplace_back(std::move(n));
+        }
         auto& col = collisions[iter];
         
-        i = 0;
-        dou
+        int i = 0;
         while (i < nNeutrons * maxSteps && !bank.empty()) {
             Neutron n = bank.front(); bank.pop_front();
             double E = n.energy; n.collisions++;
-            // We can just pick a neutron as it will travel infinitely until the collisions site
-
-            // Sample Material
+            
+            buildMaterialCum(mats, E, MTs, matCum, matTotal);
             double u1 = randomVal() * matTotal;
             size_t imat = pickIndex(matCum, u1);
 
-            double u2 = randomVal() * rxTotal[imat];
-            size_t irx = pickIndex(rxCum[imat], u2);
-            int mtChosen = rxLabels[imat][irx];
+            buildReactionCum(mats[imat], E, MTs, rxLabels, rxCum, rxTotal);
+            double u2 = randomVal() * rxTotal;
+            size_t irx = pickIndex(rxCum, u2);
+            int mtChosen = rxLabels[irx];
 
             // Update Reaction stats
             auto it = std::find(MTs.begin(), MTs.end(), mtChosen);
@@ -355,19 +354,17 @@ void simulation(int nNeutrons, double energy, int iterations, int maxSteps, int 
             }
             if (mtChosen == 2) {
                 double Eout;
-                elastic_scatter(E, mats[imat].aw, mats[imat].T, 2e-4, Eout);
+                elasticScatter(E, mats[imat].aw, mats[imat].T, 2e-4, Eout);
                 n.energy = Eout;
-                col.num[n.collisions]++;
-                col.sumEnergy[n.collisions] += E;
+                recordCollision(col, n.collisions, E);
             }
             if (mtChosen == 4) {
 
-
-                col.num[n.collisions]++;
-                col.sumEnergy[n.collisions] += E;
+                
+                recordCollision(col, n.collisions, E);
             }
             if (mtChosen == 18) { // Fission                
-                const int nEmit = sampleMultiplicity(nuvalueInterp(mats[imat].neutrons, E)_bar);
+                const int nEmit = sampleMultiplicity(valueInterp(mats[imat].neutrons, E));
                 fNeutrons[iter] += nEmit;
                 for (int k=0;k<nEmit;++k) {
                     double Eout;
@@ -375,7 +372,7 @@ void simulation(int nNeutrons, double energy, int iterations, int maxSteps, int 
                     const double T = 1.2895; // Standard value for U235
                     Eout = sampleMaxwellE(T);
 
-                    Neutron neu(E, 0);
+                    Neutron neu = {Eout, 0};
                     bank.emplace_back(std::move(neu));
                 }
             }
@@ -383,6 +380,57 @@ void simulation(int nNeutrons, double energy, int iterations, int maxSteps, int 
             i++;
         }
     }
+    SimRes simRes = {statM, collisions, fNeutrons};
+    return simRes;
+}
+
+inline StatsOut computeStats(const std::vector<std::vector<std::vector<int>>>& statM) {
+    const size_t I = statM.size();
+    const size_t M = I? statM[0].size() : 0;
+    const size_t R = (M? statM[0][0].size() : 0);
+    StatsOut out;
+    out.mean.assign(M, std::vector<double>(R, 0.0));
+    out.relErr.assign(M, std::vector<double>(R, 0.0));
+    out.sum.assign(M, std::vector<int>(R, 0));
+
+    for (size_t m=0; m<M; ++m) {
+        for (size_t r=0; r<R; ++r) {
+            long long S = 0; long double Q = 0.0L;
+            for (size_t i=0; i<I; ++i) {
+                int c = statM[i][m][r];
+                S += c;
+                Q += 1.0L * c * c;
+            }
+            const double N = double(I);
+            const double mu = (I? double(S)/N : 0.0);
+            const double var = (I>1)? double((Q - (1.0L*S*S)/N) / (N - 1.0)) : 0.0;
+            const double se  = (I>0)? std::sqrt(std::max(0.0, var) / N) : 0.0;
+            out.sum[m][r]    = int(S);
+            out.mean[m][r]   = mu;
+            out.relErr[m][r]= (mu>0.0)? se/mu : 0.0;
+        }
+    }
+    return out;
+}
+
+inline std::vector<double> computeColEnergy(const std::vector<Collisions>& cols) {
+    size_t K = 0;
+    for (const auto& c : cols) K = std::max(K, std::min(c.num.size(), c.sumEnergy.size()));
+
+    std::vector<long long> N(K, 0);
+    std::vector<double> S(K, 0.0);
+
+    for (const auto& c : cols) {
+        const size_t kmax = std::min(c.num.size(), c.sumEnergy.size());
+        for (size_t k = 0; k < kmax; ++k) {
+            N[k] += c.num[k];
+            S[k] += c.sumEnergy[k];
+        }
+    }
+
+    std::vector<double> avg(K, 0.0);
+    for (size_t k = 0; k < K; ++k) avg[k] = (N[k] > 0) ? (S[k] / double(N[k])) : 0.0;
+    return avg;
 }
 
 
@@ -412,7 +460,7 @@ int main() {
         float energy;
         if (std::sscanf(line.c_str(), "%31s %d %f %d %d %d %d", 
         command, &nNeutrons, &energy, &iterations, &nMaterials, &maxSteps, &inelastic) == 7) {
-            // Standard simulationf for standard parameters
+            // Standard simulation for standard parameters
             if (std::strcmp(command, "simulation") == 0) {
                 // Read and store all material information for given material
                 std::vector<Material> mats;
@@ -433,11 +481,16 @@ int main() {
                         if (!readMaterialBlock(materialdata, mat)) {
                             std::cerr << "Block read fail " << i << "\n";
                         }
-                    mats.push_back(std::move(mat), x);
+                    mats.push_back(std::move(mat));
                     }
                 }
-            fillData(mats, inelastic);
-            simulation(nNeutrons, energy, iterations, maxSteps, inelastic, mats, x);
+            fillData(mats, x, inelastic);
+            SimRes simRes = simulation(nNeutrons, energy, iterations, maxSteps, inelastic, mats, x);
+            StatsOut matrixStats = computeStats(simRes.statM);
+            std::vector<double> collisionEnergy = computeColEnergy(simRes.collisions);
+
+
+
             // Simulation is used for 
             // M3 - H1 and H2 slowing down neutrons - plot neutron energy/collision number
             // Multiplication of neutrons in Uranium 
@@ -453,7 +506,6 @@ int main() {
                 
 
             }
-
 
 
         } else {

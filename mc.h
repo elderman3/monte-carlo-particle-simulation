@@ -20,10 +20,21 @@ typedef struct Collisions{
     std::vector<double> sumEnergy;
 } Collisions;
 
+typedef struct SimRes{
+    std::vector<std::vector<std::vector<int>>> statM;
+    std::vector<Collisions> collisions;
+    std::vector<int> fNeutrons;
+} SimRes;
+
+struct StatsOut {
+    std::vector<std::vector<double>> mean;
+    std::vector<std::vector<double>> relErr;
+    std::vector<std::vector<int>> sum;
+};
+
 typedef struct Neutron{
     double energy;
     int collisions = 0;
-
 } Neutron;
 
 typedef struct Result{
