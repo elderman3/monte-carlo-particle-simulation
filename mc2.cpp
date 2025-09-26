@@ -14,9 +14,13 @@
 #include <deque>
 #include <iomanip>
 #include <cstring>
+#include <cctype>
+
+// cl /std:c++17 /Od /Zi /FS /RTC1 /EHsc /MDd mc2.cpp /Fe:mc2.exe
 
 constexpr double kB = 8.617333262e-11;
-constexpr double th = 0.5e-6;
+constexpr double th = 2.5e-8;
+constexpr double M_PI = 3.14159265358979323846;
 
 inline size_t pickIndex(const std::vector<double>& cum, double u) {
     auto it = std::upper_bound(cum.begin(), cum.end(), u);
@@ -84,7 +88,6 @@ double randomVal(float min, float max) {
 }
 
 bool readMaterialBlock(std::istream& in, Material& mat) {
-    mat = Material();
     if (!(in >> mat.sym >> mat.z >> mat.a >> mat.aw >> mat.T))
         return false;
 
@@ -132,7 +135,7 @@ void fillData(std::vector<Material>& mats, std::vector<double>& x, int inelastic
                     sum1 += val;
                 }
             }
-            if (inelastic) {
+            if (!inelastic) {
                 sum1 += sum4;
             }
         out1.emplace_back(d, sum1);
@@ -282,7 +285,78 @@ inline double sigmaTot(const std::vector<Material>& mats, double E, const std::v
 
 inline double neutronSpeed(double E){ return std::sqrt(std::max(0.0, 2.0*E)); }
 
-SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, int inelastic, std::vector<Material> mats) {
+inline bool isThermal(double E, const Material& m){
+    return E <= 3.0 * kB * m.T;   // 3kT band; tighten to 1kT if needed
+}
+
+inline void printMaterial(const Material& m, std::ostream& os = std::cout) {
+    auto print_samples = [&](const std::vector<std::pair<double,double>>& v) {
+        os << "size=" << v.size();
+        if (!v.empty()) {
+            os << ", first(E,σ)=(" << std::scientific << v.front().first
+               << "," << v.front().second << ")"
+               << ", last(E,σ)=(" << v.back().first
+               << "," << v.back().second << ")" << std::defaultfloat;
+        }
+    };
+
+    os << "Material {\n";
+    os << "  sym=\"" << m.sym << "\""
+       << ", Z=" << m.z
+       << ", A=" << m.a
+       << ", aw=" << m.aw
+       << ", T=" << m.T
+       << ", rho=" << m.rho
+       << ", proportion=" << m.proportion << "\n";
+
+    os << "  neutrons ν̄(E): ";
+    if (m.neutrons.empty()) {
+        os << "none\n";
+    } else {
+        os << "N=" << m.neutrons.size() << ", samples: ";
+        const size_t kmax = std::min<size_t>(5, m.neutrons.size());
+        for (size_t i = 0; i < kmax; ++i)
+            os << "(" << m.neutrons[i].first << "," << m.neutrons[i].second << ")"
+               << (i+1<kmax? ", ":"");
+        if (m.neutrons.size() > kmax) os << ", ...";
+        os << "\n";
+    }
+
+    os << "  Qvals (by MT): ";
+    if (m.Qvals.empty()) {
+        os << "none\n";
+    } else {
+        bool first = true;
+        for (const auto& [mt,q] : m.Qvals) {
+            os << (first? "" : ", ") << "MT" << mt << "=" << q;
+            first = false;
+        }
+        os << "\n";
+    }
+
+    os << "  MT tables:\n";
+    if (m.mt.empty()) {
+        os << "    none\n";
+    } else {
+        for (const auto& [mt,vec] : m.mt) {
+            os << "    MT" << mt << ": ";
+            print_samples(vec);
+            os << "\n";
+        }
+    }
+    os << "}\n";
+}
+
+inline std::string normSym(std::string s){ std::string t; t.reserve(s.size());
+  for (unsigned char c: s) if (std::isalnum(c)) t.push_back((char)std::toupper(c));
+  return t; }
+inline bool isU235(const Material& m){ return normSym(m.sym)=="U235"; }
+inline bool isU238(const Material& m){ return normSym(m.sym)=="U238"; }
+inline bool isFuel(const Material& m){
+  auto s=normSym(m.sym); return s=="U235"||s=="U238"||s=="PU239"||s=="PU241";
+}
+
+SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, int inelastic, std::vector<Material>& mats) {
     // Data collection
     std::vector<Collisions> collisions;
     for (int i = 0; i < iterations; ++i)
@@ -296,13 +370,12 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
             iterations, std::vector<std::vector<int>>(mats.size(), std::vector<int>(MTs.size(), 0)));
 
     std::vector<FourTally> fourFV(iterations);
-    TimeHist timeHist(1e-7, 2000);
+    TimeHist timeHist(1e-2, 1000);
     std::deque<Neutron> bank;
     std::vector<double> matCum;
     std::vector<int> rxLabels;
     std::vector<double> rxCum;
     double matTotal = 0.0, rxTotal = 0.0;
-
 
     for (int iter = 0; iter < iterations; ++iter) {
         bank.clear();
@@ -317,15 +390,13 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
         while (i < 1LL * nNeutrons * maxSteps && !bank.empty()) {
             Neutron n = bank.front(); bank.pop_front();
             double E = n.energy; n.collisions++;
-            if (n.collisions == 1) { ++fourFV[iter].started; }
-
             // Sample time
             const double sTot = sigmaTot(mats, E, MTs);
+            if (sTot <= 0.0) { ++i; continue; }
             const double xi = randomVal();
             const double path = -std::log(xi) / sTot;
             const double v = neutronSpeed(E);
             n.time += (v > 0.0 ? path / v : 0.0);
-
             buildMaterialCum(mats, E, MTs, matCum, matTotal);
             if (matTotal <= 0.0 || matCum.empty()) { ++i; continue; }
             size_t imat = pickIndex(matCum, randomVal() * matTotal);
@@ -336,7 +407,6 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
             size_t irx = pickIndex(rxCum, randomVal() * rxTotal);
             if (irx >= rxLabels.size()) { ++i; continue; }
             int mtChosen = rxLabels[irx];
-
             // Update Reaction stats
             auto it = std::find(MTs.begin(), MTs.end(), mtChosen);
             if (it != MTs.end()) {
@@ -346,54 +416,57 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
             if (mtChosen == 2) {
                 double Eout;
                 elasticScatter(E, mats[imat].aw, mats[imat].T, 2e-4, Eout);
-                if (n.isSource && !n.reachedTh && Eout <= th) { n.reachedTh = true; ++fourFV[iter].reachedThermal; }
+                if (n.isSource && !n.reachedTh && isThermal(Eout, mats[imat])) { n.reachedTh = true; ++fourFV[iter].reachedThermal; }
 
                 n.energy = Eout;
                 recordCollision(col, n.collisions, E);
                 bank.emplace_back(n);
-
+                i++;
                 continue;
             }
             if (mtChosen == 4) {
-                const double A     = massRatioA(mats[imat]);
+                const double A = massRatioA(mats[imat]);
                 const double Delta = getDeltaE(mats[imat], E);
-                const double Eout  = inelasticEnergyStationary(E, A, Delta);
+                const double Eout = inelasticEnergyStationary(E, A, Delta);
 
                 recordCollision(col, n.collisions, E);
-                if (n.isSource && !n.reachedTh && Eout <= th) { n.reachedTh = true; ++fourFV[iter].reachedThermal; }
+                if (n.isSource && !n.reachedTh && isThermal(Eout, mats[imat])) { n.reachedTh = true; ++fourFV[iter].reachedThermal; }
                 n.energy = Eout;
                 bank.emplace_back(n);
+                i++;
                 continue;
             }
             if (mtChosen == 18) { // Fission                
                 const int nEmit = sampleMultiplicity(valueInterp(mats[imat].neutrons, E));
                 fNeutrons[iter] += nEmit;
-
-                fourFV[iter].fissionBirthsTotal += nEmit;
-                if (E <= th) fourFV[iter].fissionBirthsThermal += nEmit;
+                if (1) {
+                    fourFV[iter].fissionBirthsTotal += nEmit;
+                    if (isThermal(E, mats[imat])) {
+                        ++fourFV[iter].absThTotal;
+                        if (isFuel(mats[imat])) ++fourFV[iter].absThFuel;
+                        fourFV[iter].fissionBirthsThermal += nEmit;
+                    }
+                }
 
                 for (int k=0;k<nEmit;++k) {
-                    double Eout;
-                    
+                    timeHist.add(n.time);
                     const double T = 1.2895; // Standard value for U235
-                    Eout = sampleMaxwellE(T);
+                    double Eout = sampleMaxwellE(T);
 
                     Neutron neu = {Eout, 0, 0, false, false};
                     bank.emplace_back(std::move(neu));
                 }
+                i++;
                 continue;
             }
             if (mtChosen == 102) {
-                if (n.isSource && !n.reachedTh && mats[imat].sym == "U238" && E >= 1e-6 && E <= 1e-2) {
+                if (n.isSource && !n.reachedTh && isU238(mats[imat]) && E>=1e-6 && E<=1e-2)
                     ++fourFV[iter].resAbsBeforeThermal;
-                }
-                timeHist.add(n.time);
-                if (E <= th) {
+                if (isThermal(E, mats[imat])) {
                     ++fourFV[iter].absThTotal;
-                    if (mats[imat].sym == "U235" || mats[imat].sym == "U238") {
-                        ++fourFV[iter].absThFuel;
-                    }
+                    if (isFuel(mats[imat])) ++fourFV[iter].absThFuel;
                 }
+                i++;
                 continue;
             }
             i++;
@@ -423,10 +496,10 @@ inline StatsOut computeStats(const std::vector<std::vector<std::vector<int>>>& s
             const double N = double(I);
             const double mu = (I? double(S)/N : 0.0);
             const double var = (I>1)? double((Q - (1.0L*S*S)/N) / (N - 1.0)) : 0.0;
-            const double se  = (I>0)? std::sqrt(std::max(0.0, var) / N) : 0.0;
-            out.sum[m][r]    = int(S);
-            out.mean[m][r]   = mu;
-            out.relErr[m][r]= (mu>0.0)? se/mu : 0.0;
+            const double se = (I>0)? std::sqrt(std::max(0.0, var) / N) : 0.0;
+            out.sum[m][r] = int(S);
+            out.mean[m][r] = mu;
+            out.relErr[m][r] = (mu>0.0)? se/mu : 0.0;
         }
     }
     return out;
@@ -452,16 +525,40 @@ inline std::vector<double> computeColEnergy(const std::vector<Collisions>& cols)
     return avg;
 }
 
-inline std::string timePath() {
+inline std::string timePathCol() {
     using clock = std::chrono::system_clock;
     const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
                         clock::now().time_since_epoch()).count();
-    return "output/dOutFile_" + std::to_string(secs) + ".csv";
+    return "output/col_" + std::to_string(secs) + ".csv";
 }
 
-inline bool storeData(const std::vector<double>& data)
+inline std::string timePathTime() {
+    using clock = std::chrono::system_clock;
+    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
+                        clock::now().time_since_epoch()).count();
+    return "output/time_" + std::to_string(secs) + ".csv";
+}
+
+inline std::string timePathkeff() {
+    using clock = std::chrono::system_clock;
+    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
+                        clock::now().time_since_epoch()).count();
+    return "output/keff_" + std::to_string(secs) + ".csv";
+}
+
+inline bool storeDatakeff(const std::vector<double>& data)
 {
-    std::ofstream os(timePath());
+    std::ofstream os(timePathkeff());
+    if (!os) return false;
+    os << std::scientific << std::setprecision(6);
+    for (size_t k = 0; k < data.size(); ++k)
+        os << k << "," << data[k] << "\n";
+    return true;
+}
+
+inline bool storeDataCol(const std::vector<double>& data)
+{
+    std::ofstream os(timePathCol());
     if (!os) return false;
     os << std::scientific << std::setprecision(6);
     for (size_t k = 0; k < data.size(); ++k)
@@ -470,7 +567,7 @@ inline bool storeData(const std::vector<double>& data)
 }
 
 static void storeTimeHist(const TimeHist& H){
-    std::ofstream os(timePath());
+    std::ofstream os(timePathTime());
     os << std::scientific << std::setprecision(6);
     for (int k=0;k<H.nbins;++k){
         const double tmid = (k + 0.5) * H.dt;
@@ -480,18 +577,18 @@ static void storeTimeHist(const TimeHist& H){
 
 inline std::string mtLabel(int mt) {
     switch (mt) {
-        case 2:   return "MT2  Elastic";
-        case 4:   return "MT4  Inelastic";
+        case 2:   return "MT2 Elastic";
+        case 4:   return "MT4 Inelastic";
         case 18:  return "MT18 Fission";
         case 102: return "MT102 Capture";
         default:  return "MT" + std::to_string(mt);
     }
 }
 
-inline double calMeanF(std::vector<int> fNeutrons, int nNeutrons) {
-    double sum = 0;
-    for (int x : fNeutrons) sum += x;
-    return sum / static_cast<double>(nNeutrons); 
+inline double calMeanF(const std::vector<int>& fNeutrons, int nNeutrons) {
+    long long S = 0; for (int x : fNeutrons) S += x;
+    const int I = int(fNeutrons.size());
+    return (I > 0 && nNeutrons > 0) ? double(S) / (double(I) * nNeutrons) : 0.0;
 }
 
 inline FourTally sumFour(const std::vector<FourTally>& v) {
@@ -569,7 +666,7 @@ inline void printStatsOut(const StatsOut& S, const std::vector<std::string>& mat
            << std::fixed << std::setprecision(2) << std::setw(6) << pct(rowTot[i]) << "%\n";
     }
 
-    os << "\n-- Matrix: mean ± relErr% (count) --\n";
+    os << "\n-- Matrix: mean +- relErr% (count) --\n";
     os << std::left << std::setw(int(wName)) << "" << "  ";
     for (size_t j=0;j<R;++j)
         os << std::left << std::setw(int(wCol[j])) << mtLabel(MTs[j]) << "  ";
@@ -585,7 +682,7 @@ inline void printStatsOut(const StatsOut& S, const std::vector<std::string>& mat
                 double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
                 std::ostringstream cell;
                 cell << std::setprecision(3) << std::scientific << S.mean[i][j]
-                     << " ± " << std::fixed << std::setprecision(1) << rPct << "% "
+                     << " +- " << std::fixed << std::setprecision(1) << rPct << "% "
                      << "(" << S.sum[i][j] << ")";
                 os << std::left << std::setw(int(wCol[j])) << cell.str() << "  ";
             }
@@ -594,10 +691,27 @@ inline void printStatsOut(const StatsOut& S, const std::vector<std::string>& mat
     }
 }
 
+inline void printFF(const FourFactors& F, std::ostream& os = std::cout) {
+    os << std::fixed << std::setprecision(6)
+       << "FourFactors{eta=" << F.eta
+       << ", eps=" << F.eps
+       << ", p="   << F.p
+       << ", f="   << F.f
+       << ", keff="<< F.keff
+       << "}\n";
+}
 
-// TODO: Create plotting functions for relevant cases M3,O3
-// TODO: Report
-
+inline void printFourTally(const FourTally& T, std::ostream& os = std::cout) {
+    os << "FourTally{"
+       << "fissionBirthsTotal=" << T.fissionBirthsTotal
+       << ", fissionBirthsThermal=" << T.fissionBirthsThermal
+       << ", absThTotal=" << T.absThTotal
+       << ", absThFuel=" << T.absThFuel
+       << ", started=" << T.started
+       << ", reachedThermal=" << T.reachedThermal
+       << ", resAbsBeforeThermal=" << T.resAbsBeforeThermal
+       << "}\n";
+}
 
 int main() {
     std::ifstream file("input.txt");
@@ -638,7 +752,7 @@ int main() {
                         if (!readMaterialBlock(materialdata, mat)) {
                             std::cerr << "Block read fail " << i << "\n";
                         }
-                    mats.push_back(std::move(mat));
+                        mats.push_back(std::move(mat));
                     }
                 }
                 std::vector<std::string> matNames; matNames.reserve(mats.size());
@@ -650,39 +764,82 @@ int main() {
                 StatsOut matrixStats = computeStats(simRes.statM);
                 std::vector<double> collisionEnergy = computeColEnergy(simRes.collisions);
                 double meanF = calMeanF(simRes.fNeutrons, nNeutrons);
+                
                 FourFactors ff = averageFour(simRes.fVec);
 
                 printStatsOut(matrixStats, matNames, MTs);
-                printf("Average Neutrons %lf \n", meanF);
-                printf("keff value %lf \n", ff.keff);
-                storeData(collisionEnergy);
+                std::cout << "Average Neutrons Produced " << meanF << "\n"; 
+                printFF(ff);
+                storeDataCol(collisionEnergy);
                 storeTimeHist(simRes.timeHist);
 
             } else if (std::strcmp(command, "criticality") == 0) {
-                int nNeutrons = 10000;
-                std::vector<double> meanFVals(101);
-                std::vector<Material> mats;
-                Material matU235, matU238;
-                matU235.rho = 19.1; matU238.rho = 19.1;
-                std::ifstream dU235("data/U235.dat");
-                std::ifstream dU238("data/U238.dat");
-                readMaterialBlock(dU235, matU235);
-                readMaterialBlock(dU238, matU238);
-                mats.push_back(std::move(matU235));
-                mats.push_back(std::move(matU238));
+                const double N_H2O = 0.0334;
+                const double N_UO2 = 0.0244672;
 
-                for (int i = 0; i < 101; ++i) {
-                    mats[0].proportion = (float) i / 100.f; 
-                    mats[1].proportion = (float) (100 - i) / 100.f;
-                    SimRes simRes = simulation(nNeutrons, 2, 10, 100000, 1, mats);
+                const double enr = 0.05;
+                const int nNeutrons = 100;
+                const int iterations = 10;
+                const int maxSteps = 1000;
+                const int inelastic = 1;
+                const double E0 = 0.5;
+
+                std::vector<double> meankeff(200);
+
+                for (int pctFuel = 2; pctFuel <= 20; ++pctFuel) {
+                    const double phi_UO2 = pctFuel / 100.0;
+                    const double phi_H2O = 1.0 - phi_UO2;
+
+                    Material matH1, matO16_H2O, matU235, matU238, matO16_UO2;
+                    {
+                        std::ifstream dH1("data/H1.dat");
+                        std::ifstream dO16a("data/O16.dat");
+                        std::ifstream dU235("data/U235.dat");
+                        std::ifstream dU238("data/U238.dat");
+                        std::ifstream dO16b("data/O16.dat");
+                        readMaterialBlock(dH1, matH1);
+                        readMaterialBlock(dO16a, matO16_H2O);
+                        readMaterialBlock(dU235, matU235);
+                        readMaterialBlock(dU238, matU238);
+                        readMaterialBlock(dO16b, matO16_UO2);
+                    }
+                    matO16_H2O.sym = "O16_H2O";
+                    matO16_UO2.sym = "O16_UO2";
+
+                    matH1.rho = N_H2O * phi_H2O; matH1.proportion = 2;
+                    matO16_H2O.rho = N_H2O * phi_H2O; matO16_H2O.proportion = 1;
+
+                    matU235.rho = N_UO2 * phi_UO2 * enr; matU235.proportion = 1;
+                    matU238.rho = N_UO2 * phi_UO2 * (1-enr); matU238.proportion = 1;
+                    matO16_UO2.rho = N_UO2 * phi_UO2; matO16_UO2.proportion = 2;
+
+                    std::vector<Material> mats;
+                    mats.reserve(5);
+                    mats.push_back(std::move(matH1));
+                    mats.push_back(std::move(matO16_H2O));
+                    mats.push_back(std::move(matU235));
+                    mats.push_back(std::move(matU238));
+                    mats.push_back(std::move(matO16_UO2));
+
+                    fillData(mats, x, inelastic);
+                    SimRes simRes = simulation(nNeutrons, E0, iterations, maxSteps, inelastic, mats);
+
+                    FourFactors ff = averageFour(simRes.fVec);
                     double meanF = calMeanF(simRes.fNeutrons, nNeutrons);
-                    meanFVals[i] = meanF;
+
+                    std::cout << "phi_UO2=" << phi_UO2
+                            << "  phi_H2O=" << phi_H2O
+                            << "  meanF=" << meanF << "\n";
+                    printFF(ff);
+                    printFourTally(simRes.fVec[0]);
+
+                    meankeff[pctFuel] = ff.keff;
                 }
-                storeData(meanFVals);
+                storeDatakeff(meankeff);
             }
         } else {
             std::cout << "Command fail: " << line << '\n';
         }
     }
-
+    return 1;
 }

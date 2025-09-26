@@ -191,4 +191,64 @@ def drawH2ONatU():
     plt.grid(True)
     plt.show()
 
-drawH2ONatU()
+#drawH2ONatU()
+
+def printCollisionEnergy():
+    x = []
+    y = []
+    with open("output/col_1758851991.csv", "r") as f:
+        for l in f:
+            l = l.rstrip().split(",")
+            x.append(int(l[0]))
+            y.append(float(l[1]))
+    x = x[1:]
+    y = y[1:]
+    plt.figure()
+    plt.title("Average Energy per Collision H2")
+    plt.xlabel("Collision number")
+    plt.ylabel("Energy (MeV)")
+    plt.loglog(x, y)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+#printCollisionEnergy()
+
+def printkeff():
+    x = []
+    y = []
+    with open("output/keff_1758847988.csv", "r") as f:
+        for l in f:
+            l = l.rstrip().split(",")
+            x.append(float(l[0]))
+            y.append(float(l[1]))
+    plt.figure()
+    plt.title("k_eff per Enrichment")
+    plt.xlabel("% of U235")
+    plt.ylabel("k_eff")
+    plt.plot(x, y)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+#printkeff()
+
+def printHistTime():
+    x = []
+    y = []
+    with open("output/time_1758854746.csv", "r") as f:
+        for l in f:
+            l = l.rstrip().split(",")
+            x.append(float(l[0]))
+            y.append(int(l[1]))
+    plt.figure()
+    plt.title("Timing of Fission (in neutron time)")
+    plt.xlabel("Time form birth (s)")
+    plt.ylabel("Collision #")
+    plt.plot(x, y)
+    plt.yscale("log")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+printHistTime()
