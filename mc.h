@@ -69,6 +69,38 @@ typedef struct Neutron{
     bool isSource;
 } Neutron;
 
+// A collection of Universes and Geometries
+typedef struct Universe{
+    std::array<double, 3> pos{0.f, 0.f, 0.f};
+    std::array<double, 3> rotation{0.f, 0.f, 0.f};
+    std::vector<Universe> subUniverse;
+    std::vector<Geometry> geometries;
+    Node rules; // Set of operations that define the shape of Universe
+    // binary tree of intersections etc to define the shape fully
+} Universe;
+
+// A single compound shape e.g., Cube, Cylinder
+typedef struct Geometry{
+    std::array<double, 3> pos{0.f, 0.f, 0.f};
+    std::array<double, 3> rotation{0.f, 0.f, 0.f};
+    std::vector<Shape> shape;
+    Node rules; // Set of operations that define the shape of Geometry
+    // binary tree of intersections etc to define the shape fully
+} Geometry;
+
+// A single Plane of a Geometry (Quadratic and Torus)
+typedef struct Shape{
+    bool torus = 0; // For torus, A, B, C are used as a,b,R
+    double A; double B; double C; double D; double E; double F; double G; double H; double I; double J;
+} Shape;
+
+typedef struct Node{
+    int type; // This is 1 for not, 2 for union, 3 for intersection
+    int shape; // Index number of universe/geometry that this
+    Node* parent;
+    std::vector<Node> children; // If empty, end of branch
+} Node;
+
 double randomVal(float min = 0.f, float max = 1.f);
 
 
