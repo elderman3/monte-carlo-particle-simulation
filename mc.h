@@ -75,14 +75,13 @@ typedef struct Universe{
     std::array<double, 3> rotation{0.f, 0.f, 0.f};
     std::vector<Universe> subUniverse;
     std::vector<Geometry> geometries;
-    Node rules; // Set of operations that define the shape of Universe
-    // binary tree of intersections etc to define the shape fully
 } Universe;
 
 // A single compound shape e.g., Cube, Cylinder
 typedef struct Geometry{
     std::array<double, 3> pos{0.f, 0.f, 0.f};
     std::array<double, 3> rotation{0.f, 0.f, 0.f};
+    std::array<double, 3> absDim{0.f, 0.f, 0.f};
     std::vector<Shape> shape;
     Node rules; // Set of operations that define the shape of Geometry
     // binary tree of intersections etc to define the shape fully
