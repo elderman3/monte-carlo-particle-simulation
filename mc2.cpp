@@ -1,4 +1,7 @@
 #include "mc.h"
+#include "simulation.cpp"
+#include "geometry.cpp"
+
 #include <sstream>
 #include <fstream>
 #include <iostream>

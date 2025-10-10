@@ -251,4 +251,4 @@ def printHistTime():
     plt.grid(True)
     plt.show()
 
-printHistTime()
+#printHistTime()
