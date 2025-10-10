@@ -73,6 +73,8 @@ typedef struct Neutron{
 typedef struct Universe{
     std::array<double, 3> pos{0.f, 0.f, 0.f};
     std::array<double, 3> rotation{0.f, 0.f, 0.f};
+    std::array<int, 2> lattice{0, 0}; // Only valid for square or hex major Universes
+    int latticeType = 0; // 0 For none, 1 for square, 2 for hex
     std::vector<Universe> subUniverse;
     std::vector<Geometry> geometries;
 } Universe;
@@ -83,6 +85,7 @@ typedef struct Geometry{
     std::array<double, 3> rotation{0.f, 0.f, 0.f};
     std::array<double, 3> absDim{0.f, 0.f, 0.f};
     std::vector<Shape> shape;
+    int shape; // Defines the possible shape, tabled elsewhere
     Node rules; // Set of operations that define the shape of Geometry
     // binary tree of intersections etc to define the shape fully
 } Geometry;
@@ -91,6 +94,7 @@ typedef struct Geometry{
 typedef struct Shape{
     bool torus = 0; // For torus, A, B, C are used as a,b,R
     double A; double B; double C; double D; double E; double F; double G; double H; double I; double J;
+    int boundary; // If boundary condition are applied, they are defined here
 } Shape;
 
 typedef struct Node{

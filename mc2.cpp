@@ -22,7 +22,7 @@ constexpr double kB = 8.617333262e-11;
 constexpr double th = 2.5e-8;
 constexpr double M_PI = 3.14159265358979323846;
 
-inline size_t pickIndex(const std::vector<double>& cum, double u) {
+size_t pickIndex(const std::vector<double>& cum, double u) {
     auto it = std::upper_bound(cum.begin(), cum.end(), u);
     if (it == cum.end()) return cum.empty() ? 0 : cum.size() - 1;  // clamp
     return size_t(it - cum.begin());
@@ -75,7 +75,7 @@ double valueInterp(const std::vector<std::pair<double,double>>& data, double tar
     return s1 + (s2 - s1) * (target - E1) / denom;
 }
 
-inline double interpMT(const std::map<int, std::vector<std::pair<double,double>>>& mt, int code, double E) {
+double interpMT(const std::map<int, std::vector<std::pair<double,double>>>& mt, int code, double E) {
     auto it = mt.find(code);
     return it == mt.end() ? 0.0 : valueInterp(it->second, E);
 }
@@ -144,13 +144,13 @@ void fillData(std::vector<Material>& mats, std::vector<double>& x, int inelastic
     }
 }
 
-inline double materialWeight(const Material& m, double E, const std::vector<int>& mts_total) {
+double materialWeight(const Material& m, double E, const std::vector<int>& mts_total) {
     double micro = 0.0;
     for (int mt : mts_total) micro += interpMT(m.mt, mt, E);
     return std::max(0.0, m.proportion * m.rho * micro);
 }
 
-inline void buildMaterialCum(const std::vector<Material>& mats, double E,
+void buildMaterialCum(const std::vector<Material>& mats, double E,
                                const std::vector<int>& mts_total,
                                std::vector<double>& cum, double& total) {
     cum.clear(); cum.reserve(mats.size());
@@ -159,7 +159,7 @@ inline void buildMaterialCum(const std::vector<Material>& mats, double E,
     total = run;
 }
 
-inline void buildReactionCum(const Material& m, double E,
+void buildReactionCum(const Material& m, double E,
                                const std::vector<int>& mts_sample,
                                std::vector<int>& labels,
                                std::vector<double>& cum, double& total) {
@@ -175,13 +175,13 @@ inline void buildReactionCum(const Material& m, double E,
     total = run;
 }
 
-inline int sampleMultiplicity(double nuBar) {
+int sampleMultiplicity(double nuBar) {
     const int n = (int)std::floor(nuBar);
     const double frac = nuBar - n;
     return n + (randomVal() < frac ? 1 : 0);
 }
 
-inline std::array<double,3> iso_dir() {
+std::array<double,3> iso_dir() {
     const double u1 = randomVal(), u2 = randomVal();
     const double mu = 2.0*u1 - 1.0;
     const double phi = 2.0*M_PI*u2;
@@ -189,22 +189,22 @@ inline std::array<double,3> iso_dir() {
     return { s*std::cos(phi), s*std::sin(phi), mu };
 }
 
-inline std::array<double,3> scale(const std::array<double,3>& a, double s){
+std::array<double,3> scale(const std::array<double,3>& a, double s){
     return {s*a[0], s*a[1], s*a[2]};
 }
 
-inline std::array<double,3> add(const std::array<double,3>& a, const std::array<double,3>& b){
+std::array<double,3> add(const std::array<double,3>& a, const std::array<double,3>& b){
     return {a[0]+b[0], a[1]+b[1], a[2]+b[2]};
 }
 
-inline double norm2(const std::array<double,3>& a){ return a[0]*a[0]+a[1]*a[1]+a[2]*a[2]; }
+double norm2(const std::array<double,3>& a){ return a[0]*a[0]+a[1]*a[1]+a[2]*a[2]; }
 
-inline std::array<double,3> normalize(const std::array<double,3>& a){
+std::array<double,3> normalize(const std::array<double,3>& a){
     double n = std::sqrt(std::max(0.0, norm2(a)));
     return (n>0)? std::array<double,3>{a[0]/n, a[1]/n, a[2]/n} : std::array<double,3>{1,0,0};
 }
 
-inline double sampleMaxwellE(double T) {
+double sampleMaxwellE(double T) {
     double xi1, xi2, xi3, xi4, R;
     do {
         xi1 = randomVal(); xi2 = randomVal();
@@ -216,7 +216,7 @@ inline double sampleMaxwellE(double T) {
     return -T * ( (xi1*xi1) * std::log(xi3)/R + std::log(xi4) );
 }
 
-inline void elasticScatter(double En, double A, double TK, double Efg, double& Eout)
+void elasticScatter(double En, double A, double TK, double Efg, double& Eout)
 {
     std::array<double,3> VL{0,0,0};
     const bool use_free_gas = (En < Efg && A <= 10.0);
@@ -240,7 +240,7 @@ inline void elasticScatter(double En, double A, double TK, double Efg, double& E
     Eout = 0.5 * norm2(vLprime);
 }
 
-inline void recordCollision(Collisions& c, int collIdx, double E) {
+void recordCollision(Collisions& c, int collIdx, double E) {
     if (collIdx >= (int)c.num.size()) {
         c.num.resize(collIdx + 1, 0);
         c.sumEnergy.resize(collIdx + 1, 0.0);
@@ -249,31 +249,31 @@ inline void recordCollision(Collisions& c, int collIdx, double E) {
     c.sumEnergy[collIdx] += E;
 }
 
-inline double massRatioA(const Material& m) {
+double massRatioA(const Material& m) {
     return (m.a > 0 ? double(m.a) : std::max(1, m.z));
 }
 
-inline double elasticEnergyStationary(double En, double A) {
+double elasticEnergyStationary(double En, double A) {
     const double a = (A-1.0)/(A+1.0);
     const double alpha = a*a;
     const double u = randomVal();
     return (alpha + (1.0 - alpha)*u) * En;
 }
 
-inline double inelasticEnergyStationary(double En, double A, double Delta) {
+double inelasticEnergyStationary(double En, double A, double Delta) {
     if (Delta <= 0.0) return elasticEnergyStationary(En, A);
     if (En <= Delta)  return 0.0;
     const double Ein = En - Delta;
     return elasticEnergyStationary(Ein, A);
 }
 
-inline double getDeltaE(const Material& m, double) {
+double getDeltaE(const Material& m, double) {
     auto it = m.Qvals.find(4);
     if (it != m.Qvals.end()) return std::abs(it->second);
     return 0.5;
 }
 
-inline double sigmaTot(const std::vector<Material>& mats, double E, const std::vector<int>& mts_total){
+double sigmaTot(const std::vector<Material>& mats, double E, const std::vector<int>& mts_total){
     double S = 0.0;
     for (const auto& m : mats){
         double micro = 0.0;
@@ -283,13 +283,259 @@ inline double sigmaTot(const std::vector<Material>& mats, double E, const std::v
     return S;
 }
 
-inline double neutronSpeed(double E){ return std::sqrt(std::max(0.0, 2.0*E)); }
+double neutronSpeed(double E){ return std::sqrt(std::max(0.0, 2.0*E)); }
 
-inline bool isThermal(double E, const Material& m){
+bool isThermal(double E, const Material& m){
     return E <= 3.0 * kB * m.T;   // 3kT band; tighten to 1kT if needed
 }
 
-inline void printMaterial(const Material& m, std::ostream& os = std::cout) {
+std::string normSym(std::string s){ std::string t; t.reserve(s.size());
+  for (unsigned char c: s) if (std::isalnum(c)) t.push_back((char)std::toupper(c));
+  return t; }
+bool isU235(const Material& m){ return normSym(m.sym)=="U235"; }
+bool isU238(const Material& m){ return normSym(m.sym)=="U238"; }
+bool isFuel(const Material& m){
+  auto s=normSym(m.sym); return s=="U235"||s=="U238"||s=="PU239"||s=="PU241";
+}
+
+StatsOut computeStats(const std::vector<std::vector<std::vector<int>>>& statM) {
+    const size_t I = statM.size();
+    const size_t M = I? statM[0].size() : 0;
+    const size_t R = (M? statM[0][0].size() : 0);
+    StatsOut out;
+    out.mean.assign(M, std::vector<double>(R, 0.0));
+    out.relErr.assign(M, std::vector<double>(R, 0.0));
+    out.sum.assign(M, std::vector<int>(R, 0));
+
+    for (size_t m=0; m<M; ++m) {
+        for (size_t r=0; r<R; ++r) {
+            long long S = 0; long double Q = 0.0L;
+            for (size_t i=0; i<I; ++i) {
+                int c = statM[i][m][r];
+                S += c;
+                Q += 1.0L * c * c;
+            }
+            const double N = double(I);
+            const double mu = (I? double(S)/N : 0.0);
+            const double var = (I>1)? double((Q - (1.0L*S*S)/N) / (N - 1.0)) : 0.0;
+            const double se = (I>0)? std::sqrt(std::max(0.0, var) / N) : 0.0;
+            out.sum[m][r] = int(S);
+            out.mean[m][r] = mu;
+            out.relErr[m][r] = (mu>0.0)? se/mu : 0.0;
+        }
+    }
+    return out;
+}
+
+std::vector<double> computeColEnergy(const std::vector<Collisions>& cols) {
+    size_t K = 0;
+    for (const auto& c : cols) K = std::max(K, std::min(c.num.size(), c.sumEnergy.size()));
+
+    std::vector<long long> N(K, 0);
+    std::vector<double> S(K, 0.0);
+
+    for (const auto& c : cols) {
+        const size_t kmax = std::min(c.num.size(), c.sumEnergy.size());
+        for (size_t k = 0; k < kmax; ++k) {
+            N[k] += c.num[k];
+            S[k] += c.sumEnergy[k];
+        }
+    }
+
+    std::vector<double> avg(K, 0.0);
+    for (size_t k = 0; k < K; ++k) avg[k] = (N[k] > 0) ? (S[k] / double(N[k])) : 0.0;
+    return avg;
+}
+
+std::string timePathCol() {
+    using clock = std::chrono::system_clock;
+    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
+                        clock::now().time_since_epoch()).count();
+    return "output/col_" + std::to_string(secs) + ".csv";
+}
+
+std::string timePathTime() {
+    using clock = std::chrono::system_clock;
+    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
+                        clock::now().time_since_epoch()).count();
+    return "output/time_" + std::to_string(secs) + ".csv";
+}
+
+std::string timePathkeff() {
+    using clock = std::chrono::system_clock;
+    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
+                        clock::now().time_since_epoch()).count();
+    return "output/keff_" + std::to_string(secs) + ".csv";
+}
+
+bool storeDatakeff(const std::vector<double>& data)
+{
+    std::ofstream os(timePathkeff());
+    if (!os) return false;
+    os << std::scientific << std::setprecision(6);
+    for (size_t k = 0; k < data.size(); ++k)
+        os << k << "," << data[k] << "\n";
+    return true;
+}
+
+bool storeDataCol(const std::vector<double>& data)
+{
+    std::ofstream os(timePathCol());
+    if (!os) return false;
+    os << std::scientific << std::setprecision(6);
+    for (size_t k = 0; k < data.size(); ++k)
+        os << k << "," << data[k] << "\n";
+    return true;
+}
+
+static void storeTimeHist(const TimeHist& H){
+    std::ofstream os(timePathTime());
+    os << std::scientific << std::setprecision(6);
+    for (int k=0;k<H.nbins;++k){
+        const double tmid = (k + 0.5) * H.dt;
+        os << tmid << "," << H.counts[k] << "\n";
+    }
+}
+
+std::string mtLabel(int mt) {
+    switch (mt) {
+        case 2:   return "MT2 Elastic";
+        case 4:   return "MT4 Inelastic";
+        case 18:  return "MT18 Fission";
+        case 102: return "MT102 Capture";
+        default:  return "MT" + std::to_string(mt);
+    }
+}
+
+double calMeanF(const std::vector<int>& fNeutrons, int nNeutrons) {
+    long long S = 0; for (int x : fNeutrons) S += x;
+    const int I = int(fNeutrons.size());
+    return (I > 0 && nNeutrons > 0) ? double(S) / (double(I) * nNeutrons) : 0.0;
+}
+
+FourTally sumFour(const std::vector<FourTally>& v) {
+    FourTally s;
+    for (const auto& x : v) {
+        s.fissionBirthsTotal += x.fissionBirthsTotal;
+        s.fissionBirthsThermal += x.fissionBirthsThermal;
+        s.absThTotal += x.absThTotal;
+        s.absThFuel += x.absThFuel;
+        s.started += x.started;
+        s.reachedThermal += x.reachedThermal;
+        s.resAbsBeforeThermal+= x.resAbsBeforeThermal;
+    }
+    return s;
+}
+
+FourFactors factorsFrom(const FourTally& T) {
+    FourFactors F;
+    F.eta = (T.absThFuel > 0) ? double(T.fissionBirthsThermal)/double(T.absThFuel) : 0.0;
+    F.eps = (T.fissionBirthsThermal > 0) ? double(T.fissionBirthsTotal)/double(T.fissionBirthsThermal) : 0.0;
+    F.p = (T.started > 0) ? double(T.reachedThermal) / double(T.reachedThermal + T.resAbsBeforeThermal) : 0.0;
+    F.f = (T.absThTotal > 0) ? double(T.absThFuel)/double(T.absThTotal) : 0.0;
+    F.keff = F.eta * F.eps * F.p * F.f;
+    return F;
+}
+
+FourFactors averageFour(const std::vector<FourTally>& perIter) {
+    return factorsFrom(sumFour(perIter));
+}
+
+void printStatsOut(const StatsOut& S, const std::vector<std::string>& matNames, const std::vector<int>& MTs, std::ostream& os = std::cout) {
+    const size_t M = S.sum.size();
+    if (!M) { os << "(no data)\n"; return; }
+    const size_t R = S.sum[0].size();
+
+    std::vector<long long> rowTot(M,0), colTot(R,0);
+    long long grand = 0;
+    for (size_t i=0;i<M;++i)
+        for (size_t j=0;j<R;++j){
+            long long v = S.sum[i][j];
+            rowTot[i]+=v; colTot[j]+=v; grand+=v;
+        }
+    auto pct=[&](long long x){ return grand? 100.0*double(x)/double(grand) : 0.0; };
+
+    size_t wName = 4;
+    for (size_t i=0;i<std::min(M,matNames.size());++i) wName = std::max(wName, matNames[i].size());
+    std::vector<size_t> wCol(R, 14);
+    for (size_t j=0;j<R;++j){
+        wCol[j] = std::max(wCol[j], mtLabel(MTs[j]).size());
+        for (size_t i=0;i<M;++i){
+            if (S.sum[i][j]==0) continue;
+            std::ostringstream ss;
+            double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
+            ss << std::setprecision(3) << std::scientific << S.mean[i][j]
+               << " ± " << std::fixed << std::setprecision(1) << rPct << "% "
+               << "(" << S.sum[i][j] << ")";
+            wCol[j] = std::max<size_t>(wCol[j], ss.str().size());
+        }
+    }
+
+    os << "\n=== Statistics ===\n";
+    os << "Total events: " << grand << "\n";
+
+    os << "\n-- By reaction (counts) --\n";
+    for (size_t j=0;j<R;++j)
+        os << std::left << std::setw(int(wCol[j])) << mtLabel(MTs[j]) << "  "
+           << std::right << std::setw(10) << colTot[j] << "  "
+           << std::fixed << std::setprecision(2) << std::setw(6) << pct(colTot[j]) << "%\n";
+
+    os << "\n-- By material (counts) --\n";
+    for (size_t i=0;i<M;++i){
+        const std::string& name = (i<matNames.size()? matNames[i] : ("mat"+std::to_string(i)));
+        os << std::left << std::setw(int(wName)) << name << "  "
+           << std::right << std::setw(10) << rowTot[i] << "  "
+           << std::fixed << std::setprecision(2) << std::setw(6) << pct(rowTot[i]) << "%\n";
+    }
+
+    os << "\n-- Matrix: mean +- relErr% (count) --\n";
+    os << std::left << std::setw(int(wName)) << "" << "  ";
+    for (size_t j=0;j<R;++j)
+        os << std::left << std::setw(int(wCol[j])) << mtLabel(MTs[j]) << "  ";
+    os << "\n";
+
+    for (size_t i=0;i<M;++i){
+        const std::string& name = (i<matNames.size()? matNames[i] : ("mat"+std::to_string(i)));
+        os << std::left << std::setw(int(wName)) << name << "  ";
+        for (size_t j=0;j<R;++j){
+            if (S.sum[i][j]==0) {
+                os << std::left << std::setw(int(wCol[j])) << "-" << "  ";
+            } else {
+                double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
+                std::ostringstream cell;
+                cell << std::setprecision(3) << std::scientific << S.mean[i][j]
+                     << " +- " << std::fixed << std::setprecision(1) << rPct << "% "
+                     << "(" << S.sum[i][j] << ")";
+                os << std::left << std::setw(int(wCol[j])) << cell.str() << "  ";
+            }
+        }
+        os << "\n";
+    }
+}
+
+void printFF(const FourFactors& F, std::ostream& os = std::cout) {
+    os << std::fixed << std::setprecision(6)
+       << "FourFactors{eta=" << F.eta
+       << ", eps=" << F.eps
+       << ", p="   << F.p
+       << ", f="   << F.f
+       << ", keff="<< F.keff
+       << "}\n";
+}
+
+void printFourTally(const FourTally& T, std::ostream& os = std::cout) {
+    os << "FourTally{"
+       << "fissionBirthsTotal=" << T.fissionBirthsTotal
+       << ", fissionBirthsThermal=" << T.fissionBirthsThermal
+       << ", absThTotal=" << T.absThTotal
+       << ", absThFuel=" << T.absThFuel
+       << ", started=" << T.started
+       << ", reachedThermal=" << T.reachedThermal
+       << ", resAbsBeforeThermal=" << T.resAbsBeforeThermal
+       << "}\n";
+}
+
+void printMaterial(const Material& m, std::ostream& os = std::cout) {
     auto print_samples = [&](const std::vector<std::pair<double,double>>& v) {
         os << "size=" << v.size();
         if (!v.empty()) {
@@ -345,15 +591,6 @@ inline void printMaterial(const Material& m, std::ostream& os = std::cout) {
         }
     }
     os << "}\n";
-}
-
-inline std::string normSym(std::string s){ std::string t; t.reserve(s.size());
-  for (unsigned char c: s) if (std::isalnum(c)) t.push_back((char)std::toupper(c));
-  return t; }
-inline bool isU235(const Material& m){ return normSym(m.sym)=="U235"; }
-inline bool isU238(const Material& m){ return normSym(m.sym)=="U238"; }
-inline bool isFuel(const Material& m){
-  auto s=normSym(m.sym); return s=="U235"||s=="U238"||s=="PU239"||s=="PU241";
 }
 
 SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, int inelastic, std::vector<Material>& mats) {
@@ -476,242 +713,15 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
     return simRes;
 }
 
-inline StatsOut computeStats(const std::vector<std::vector<std::vector<int>>>& statM) {
-    const size_t I = statM.size();
-    const size_t M = I? statM[0].size() : 0;
-    const size_t R = (M? statM[0][0].size() : 0);
-    StatsOut out;
-    out.mean.assign(M, std::vector<double>(R, 0.0));
-    out.relErr.assign(M, std::vector<double>(R, 0.0));
-    out.sum.assign(M, std::vector<int>(R, 0));
-
-    for (size_t m=0; m<M; ++m) {
-        for (size_t r=0; r<R; ++r) {
-            long long S = 0; long double Q = 0.0L;
-            for (size_t i=0; i<I; ++i) {
-                int c = statM[i][m][r];
-                S += c;
-                Q += 1.0L * c * c;
-            }
-            const double N = double(I);
-            const double mu = (I? double(S)/N : 0.0);
-            const double var = (I>1)? double((Q - (1.0L*S*S)/N) / (N - 1.0)) : 0.0;
-            const double se = (I>0)? std::sqrt(std::max(0.0, var) / N) : 0.0;
-            out.sum[m][r] = int(S);
-            out.mean[m][r] = mu;
-            out.relErr[m][r] = (mu>0.0)? se/mu : 0.0;
-        }
-    }
-    return out;
+Geometry readGeometry() {
+    // 
 }
 
-inline std::vector<double> computeColEnergy(const std::vector<Collisions>& cols) {
-    size_t K = 0;
-    for (const auto& c : cols) K = std::max(K, std::min(c.num.size(), c.sumEnergy.size()));
-
-    std::vector<long long> N(K, 0);
-    std::vector<double> S(K, 0.0);
-
-    for (const auto& c : cols) {
-        const size_t kmax = std::min(c.num.size(), c.sumEnergy.size());
-        for (size_t k = 0; k < kmax; ++k) {
-            N[k] += c.num[k];
-            S[k] += c.sumEnergy[k];
-        }
-    }
-
-    std::vector<double> avg(K, 0.0);
-    for (size_t k = 0; k < K; ++k) avg[k] = (N[k] > 0) ? (S[k] / double(N[k])) : 0.0;
-    return avg;
+Universe readGeometryFile() {
+    //
 }
 
-inline std::string timePathCol() {
-    using clock = std::chrono::system_clock;
-    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
-                        clock::now().time_since_epoch()).count();
-    return "output/col_" + std::to_string(secs) + ".csv";
-}
 
-inline std::string timePathTime() {
-    using clock = std::chrono::system_clock;
-    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
-                        clock::now().time_since_epoch()).count();
-    return "output/time_" + std::to_string(secs) + ".csv";
-}
-
-inline std::string timePathkeff() {
-    using clock = std::chrono::system_clock;
-    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
-                        clock::now().time_since_epoch()).count();
-    return "output/keff_" + std::to_string(secs) + ".csv";
-}
-
-inline bool storeDatakeff(const std::vector<double>& data)
-{
-    std::ofstream os(timePathkeff());
-    if (!os) return false;
-    os << std::scientific << std::setprecision(6);
-    for (size_t k = 0; k < data.size(); ++k)
-        os << k << "," << data[k] << "\n";
-    return true;
-}
-
-inline bool storeDataCol(const std::vector<double>& data)
-{
-    std::ofstream os(timePathCol());
-    if (!os) return false;
-    os << std::scientific << std::setprecision(6);
-    for (size_t k = 0; k < data.size(); ++k)
-        os << k << "," << data[k] << "\n";
-    return true;
-}
-
-static void storeTimeHist(const TimeHist& H){
-    std::ofstream os(timePathTime());
-    os << std::scientific << std::setprecision(6);
-    for (int k=0;k<H.nbins;++k){
-        const double tmid = (k + 0.5) * H.dt;
-        os << tmid << "," << H.counts[k] << "\n";
-    }
-}
-
-inline std::string mtLabel(int mt) {
-    switch (mt) {
-        case 2:   return "MT2 Elastic";
-        case 4:   return "MT4 Inelastic";
-        case 18:  return "MT18 Fission";
-        case 102: return "MT102 Capture";
-        default:  return "MT" + std::to_string(mt);
-    }
-}
-
-inline double calMeanF(const std::vector<int>& fNeutrons, int nNeutrons) {
-    long long S = 0; for (int x : fNeutrons) S += x;
-    const int I = int(fNeutrons.size());
-    return (I > 0 && nNeutrons > 0) ? double(S) / (double(I) * nNeutrons) : 0.0;
-}
-
-inline FourTally sumFour(const std::vector<FourTally>& v) {
-    FourTally s;
-    for (const auto& x : v) {
-        s.fissionBirthsTotal += x.fissionBirthsTotal;
-        s.fissionBirthsThermal += x.fissionBirthsThermal;
-        s.absThTotal += x.absThTotal;
-        s.absThFuel += x.absThFuel;
-        s.started += x.started;
-        s.reachedThermal += x.reachedThermal;
-        s.resAbsBeforeThermal+= x.resAbsBeforeThermal;
-    }
-    return s;
-}
-
-inline FourFactors factorsFrom(const FourTally& T) {
-    FourFactors F;
-    F.eta = (T.absThFuel > 0) ? double(T.fissionBirthsThermal)/double(T.absThFuel) : 0.0;
-    F.eps = (T.fissionBirthsThermal > 0) ? double(T.fissionBirthsTotal)/double(T.fissionBirthsThermal) : 0.0;
-    F.p = (T.started > 0) ? double(T.reachedThermal) / double(T.reachedThermal + T.resAbsBeforeThermal) : 0.0;
-    F.f = (T.absThTotal > 0) ? double(T.absThFuel)/double(T.absThTotal) : 0.0;
-    F.keff = F.eta * F.eps * F.p * F.f;
-    return F;
-}
-
-inline FourFactors averageFour(const std::vector<FourTally>& perIter) {
-    return factorsFrom(sumFour(perIter));
-}
-
-inline void printStatsOut(const StatsOut& S, const std::vector<std::string>& matNames, const std::vector<int>& MTs, std::ostream& os = std::cout) {
-    const size_t M = S.sum.size();
-    if (!M) { os << "(no data)\n"; return; }
-    const size_t R = S.sum[0].size();
-
-    std::vector<long long> rowTot(M,0), colTot(R,0);
-    long long grand = 0;
-    for (size_t i=0;i<M;++i)
-        for (size_t j=0;j<R;++j){
-            long long v = S.sum[i][j];
-            rowTot[i]+=v; colTot[j]+=v; grand+=v;
-        }
-    auto pct=[&](long long x){ return grand? 100.0*double(x)/double(grand) : 0.0; };
-
-    size_t wName = 4;
-    for (size_t i=0;i<std::min(M,matNames.size());++i) wName = std::max(wName, matNames[i].size());
-    std::vector<size_t> wCol(R, 14);
-    for (size_t j=0;j<R;++j){
-        wCol[j] = std::max(wCol[j], mtLabel(MTs[j]).size());
-        for (size_t i=0;i<M;++i){
-            if (S.sum[i][j]==0) continue;
-            std::ostringstream ss;
-            double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
-            ss << std::setprecision(3) << std::scientific << S.mean[i][j]
-               << " ± " << std::fixed << std::setprecision(1) << rPct << "% "
-               << "(" << S.sum[i][j] << ")";
-            wCol[j] = std::max<size_t>(wCol[j], ss.str().size());
-        }
-    }
-
-    os << "\n=== Statistics ===\n";
-    os << "Total events: " << grand << "\n";
-
-    os << "\n-- By reaction (counts) --\n";
-    for (size_t j=0;j<R;++j)
-        os << std::left << std::setw(int(wCol[j])) << mtLabel(MTs[j]) << "  "
-           << std::right << std::setw(10) << colTot[j] << "  "
-           << std::fixed << std::setprecision(2) << std::setw(6) << pct(colTot[j]) << "%\n";
-
-    os << "\n-- By material (counts) --\n";
-    for (size_t i=0;i<M;++i){
-        const std::string& name = (i<matNames.size()? matNames[i] : ("mat"+std::to_string(i)));
-        os << std::left << std::setw(int(wName)) << name << "  "
-           << std::right << std::setw(10) << rowTot[i] << "  "
-           << std::fixed << std::setprecision(2) << std::setw(6) << pct(rowTot[i]) << "%\n";
-    }
-
-    os << "\n-- Matrix: mean +- relErr% (count) --\n";
-    os << std::left << std::setw(int(wName)) << "" << "  ";
-    for (size_t j=0;j<R;++j)
-        os << std::left << std::setw(int(wCol[j])) << mtLabel(MTs[j]) << "  ";
-    os << "\n";
-
-    for (size_t i=0;i<M;++i){
-        const std::string& name = (i<matNames.size()? matNames[i] : ("mat"+std::to_string(i)));
-        os << std::left << std::setw(int(wName)) << name << "  ";
-        for (size_t j=0;j<R;++j){
-            if (S.sum[i][j]==0) {
-                os << std::left << std::setw(int(wCol[j])) << "-" << "  ";
-            } else {
-                double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
-                std::ostringstream cell;
-                cell << std::setprecision(3) << std::scientific << S.mean[i][j]
-                     << " +- " << std::fixed << std::setprecision(1) << rPct << "% "
-                     << "(" << S.sum[i][j] << ")";
-                os << std::left << std::setw(int(wCol[j])) << cell.str() << "  ";
-            }
-        }
-        os << "\n";
-    }
-}
-
-inline void printFF(const FourFactors& F, std::ostream& os = std::cout) {
-    os << std::fixed << std::setprecision(6)
-       << "FourFactors{eta=" << F.eta
-       << ", eps=" << F.eps
-       << ", p="   << F.p
-       << ", f="   << F.f
-       << ", keff="<< F.keff
-       << "}\n";
-}
-
-inline void printFourTally(const FourTally& T, std::ostream& os = std::cout) {
-    os << "FourTally{"
-       << "fissionBirthsTotal=" << T.fissionBirthsTotal
-       << ", fissionBirthsThermal=" << T.fissionBirthsThermal
-       << ", absThTotal=" << T.absThTotal
-       << ", absThFuel=" << T.absThFuel
-       << ", started=" << T.started
-       << ", reachedThermal=" << T.reachedThermal
-       << ", resAbsBeforeThermal=" << T.resAbsBeforeThermal
-       << "}\n";
-}
 
 int main() {
     std::ifstream file("input.txt");
