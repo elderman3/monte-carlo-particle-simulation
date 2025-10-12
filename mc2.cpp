@@ -1,7 +1,4 @@
 #include "mc.h"
-#include "simulation.cpp"
-#include "geometry.cpp"
-
 #include <sstream>
 #include <fstream>
 #include <iostream>
@@ -716,18 +713,27 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
     return simRes;
 }
 
-Geometry readGeometry() {
-    // 
+int insideShape(Neutron n, Shape shape) {
+    // code both for torus and quadratic
 }
 
-Universe readGeometryFile() {
+std::vector<float> distanceToGeometry(Neutron n, Geometry g) {
+    //
+    
+}
+
+Geometry readGeometry() {
+    // Reads an individual line of the constituents of 
+}
+
+Universe readUniverseFile() {
     //
 }
 
 
 
 int main() {
-    std::ifstream file("input.txt");
+    std::ifstream file("geometry.txt");
     if (!file) {
         std::cerr << "File opening failed\n";
         return 1;
@@ -736,6 +742,8 @@ int main() {
     auto x = logspace(-11.0, std::log10(20.0), 500); // same x values for all simulations
 
     std::string line;
+
+    
     while (std::getline(file, line)) {
         char command[32];
         int nNeutrons, iterations, nMaterials, maxSteps, inelastic;
@@ -850,9 +858,28 @@ int main() {
                 }
                 storeDatakeff(meankeff);
             }
+        } else if (std::sscanf(line.c_str(), "%31s", command) == 1) {
+            Universe universe;
+            if (std::strcmp(command, "geometry") == 0) {
+                // begin understanding geometry
+
+                universe = readUniverseFile(&universe, )
+
+
+
+
+
+
+
+
+            }
         } else {
             std::cout << "Command fail: " << line << '\n';
         }
     }
+
+    
     return 1;
 }
+
+

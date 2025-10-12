@@ -5,6 +5,8 @@
 #include <array>
 #include <deque>
 
+enum class Op : uint8_t { L=0, N=1, U=2, I=3 };
+
 typedef struct Material{
     std::string sym{};
     int z = 0;
@@ -62,6 +64,9 @@ struct StatsOut {
 };
 
 typedef struct Neutron{
+    std::array<double, 3> pos;
+    std::array<double, 3> dir;
+    double vel; 
     double energy;
     int collisions = 0;
     double time = 0;
@@ -71,8 +76,12 @@ typedef struct Neutron{
 
 // A collection of Universes and Geometries
 typedef struct Universe{
+    std::string name;
     std::array<double, 3> pos{0.f, 0.f, 0.f};
-    std::array<double, 3> rotation{0.f, 0.f, 0.f};
+    std::array<double, 3> rot{0.f, 0.f, 0.f}; // Always keep these 0, Universes are not rotatable. 
+    std::array<double, 3> boundDim{0.f, 0.f 0.f}; // Bounding box construction args
+    Geometry boundingGeometry; // Universe bounding box
+    int universeShape; // Defines how the Universe Bounding box is constructed
     std::array<int, 2> lattice{0, 0}; // Only valid for square or hex major Universes
     int latticeType = 0; // 0 For none, 1 for square, 2 for hex
     std::vector<Universe> subUniverse;
@@ -82,26 +91,25 @@ typedef struct Universe{
 // A single compound shape e.g., Cube, Cylinder
 typedef struct Geometry{
     std::array<double, 3> pos{0.f, 0.f, 0.f};
-    std::array<double, 3> rotation{0.f, 0.f, 0.f};
-    std::array<double, 3> absDim{0.f, 0.f, 0.f};
-    std::vector<Shape> shape;
+    std::array<double, 3> rot{0.f, 0.f, 0.f}; // Always keep these 0, Universes are not rotatable. 
+    std::array<Shape> shapes;
     int shape; // Defines the possible shape, tabled elsewhere
-    Node rules; // Set of operations that define the shape of Geometry
+    int nodeRoot;
+    std::vector<Node> nodes; // Set of operations that define the shape of Geometry
     // binary tree of intersections etc to define the shape fully
 } Geometry;
 
 // A single Plane of a Geometry (Quadratic and Torus)
 typedef struct Shape{
-    bool torus = 0; // For torus, A, B, C are used as a,b,R
+    bool torus = 0; // For torus, A, B, C are used as a,b,R. Additionally, DEF are center and GHI Axis
     double A; double B; double C; double D; double E; double F; double G; double H; double I; double J;
-    int boundary; // If boundary condition are applied, they are defined here
 } Shape;
 
 typedef struct Node{
-    int type; // This is 1 for not, 2 for union, 3 for intersection
-    int shape; // Index number of universe/geometry that this
-    Node* parent;
-    std::vector<Node> children; // If empty, end of branch
+  Op op;
+  int shape; // Index of Shape
+  int left;    // child index or -1
+  int right;   // child index or -1
 } Node;
 
 double randomVal(float min = 0.f, float max = 1.f);
