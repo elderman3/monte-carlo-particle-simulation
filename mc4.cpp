@@ -123,77 +123,84 @@ int main() {
                 storeDataCol(collisionEnergy);
                 storeTimeHist(simRes.timeHist);
 
-            } else if (std::strcmp(command, "criticality") == 0) {
-                const double N_H2O = 0.0334;
-                const double N_UO2 = 0.0244672;
-
-                const double enr = 0.05;
-                const int nNeutrons = 100;
-                const int iterations = 10;
-                const int maxSteps = 1000;
-                const int inelastic = 1;
-                const double E0 = 0.5;
-
-                std::vector<double> meankeff(200);
-
-                for (int pctFuel = 2; pctFuel <= 20; ++pctFuel) {
-                    const double phi_UO2 = pctFuel / 100.0;
-                    const double phi_H2O = 1.0 - phi_UO2;
-
-                    Material matH1, matO16_H2O, matU235, matU238, matO16_UO2;
-                    {
-                        std::ifstream dH1("data/H1.dat");
-                        std::ifstream dO16a("data/O16.dat");
-                        std::ifstream dU235("data/U235.dat");
-                        std::ifstream dU238("data/U238.dat");
-                        std::ifstream dO16b("data/O16.dat");
-                        readMaterialBlock(dH1, matH1);
-                        readMaterialBlock(dO16a, matO16_H2O);
-                        readMaterialBlock(dU235, matU235);
-                        readMaterialBlock(dU238, matU238);
-                        readMaterialBlock(dO16b, matO16_UO2);
-                    }
-                    matO16_H2O.sym = "O16_H2O";
-                    matO16_UO2.sym = "O16_UO2";
-
-                    matH1.rho = N_H2O * phi_H2O; matH1.proportion = 2;
-                    matO16_H2O.rho = N_H2O * phi_H2O; matO16_H2O.proportion = 1;
-
-                    matU235.rho = N_UO2 * phi_UO2 * enr; matU235.proportion = 1;
-                    matU238.rho = N_UO2 * phi_UO2 * (1-enr); matU238.proportion = 1;
-                    matO16_UO2.rho = N_UO2 * phi_UO2; matO16_UO2.proportion = 2;
-
-                    std::vector<Material> mats;
-                    mats.reserve(5);
-                    mats.push_back(std::move(matH1));
-                    mats.push_back(std::move(matO16_H2O));
-                    mats.push_back(std::move(matU235));
-                    mats.push_back(std::move(matU238));
-                    mats.push_back(std::move(matO16_UO2));
-
-                    fillData(mats, x, inelastic);
-                    SimRes simRes = simulation(nNeutrons, E0, iterations, maxSteps, inelastic, mats);
-
-                    FourFactors ff = averageFour(simRes.fVec);
-                    double meanF = calMeanF(simRes.fNeutrons, nNeutrons);
-
-                    std::cout << "phi_UO2=" << phi_UO2
-                            << "  phi_H2O=" << phi_H2O
-                            << "  meanF=" << meanF << "\n";
-                    printFF(ff);
-                    printFourTally(simRes.fVec[0]);
-
-                    meankeff[pctFuel] = ff.keff;
-                }
-                storeDatakeff(meankeff);
+            } else {
+                std::cout << "Command fail: " << line << '\n';
             }
-        } else {
-            std::cout << "Command fail: " << line << '\n';
-        }
-    }
+    }}
 
     
     return 1;
 }
 
+// Using this as the template 
 
+int main() {
+    std::ifstream file("geometry/geometry.txt");
+    if (!file) { std::cout << "File opening failed\n"; return 1; }
+    Universe u; // This universe is used in all further calculations, where the possible lattice will be constructed 
+    Universe singleUniverse;
+    std::string line;
+    if (!readUniverseFile(file, singleUniverse)) { std::cout << "Failed reading Universe"; return 1; }
+    if (singleUniverse.latticeType) {
+        if (singleUniverse.latticeType == 1) {
+            const int cols = singleUniverse.lattice[0];
+            const int rows = singleUniverse.lattice[1];
+            if (cols <= 0 || rows <= 0) return 1;
+            u.latticeType = singleUniverse.latticeType;
+            u.lattice = {cols, rows};
+            u.boundDim = singleUniverse.boundDim;
+            u.universeShape = singleUniverse.universeShape;
+            for (int i = 0; i < cols; ++i) {
+                for (int j = 0; j < rows; ++j) {
+                    Universe temp = singleUniverse;
+                    temp.latticeType = 1;
+                    auto C = squareCellCenter(u, i, j);
+                    temp.pos = { C[0], C[1], 0.0 };
+                    u.subUniverse.push_back(std::move(temp));
+                }
+            }
+        } else if (singleUniverse.latticeType == 2) {
+            const int cols = singleUniverse.lattice[0];
+            const int rows = singleUniverse.lattice[1];
+            if (cols <= 0 || rows <= 0) return 1;
+            
+            double t = singleUniverse.boundDim[0];
+            double d = t * std::sqrt(3);
+            double lat = 1.5 * t; 
+            u.latticeType = singleUniverse.latticeType;
+            u.lattice = {cols, rows};
+            u.boundDim = singleUniverse.boundDim;
+            u.universeShape = singleUniverse.universeShape;
+            for (int i = 0; i < cols; ++i) {
+                for (int j = 0; j < rows; ++j) {
+                    Universe temp = singleUniverse;
+                    temp.latticeType = 2;
+                    auto C = hexCellCenter(u, i, j);
+                    temp.pos = { C[0], C[1], 0.0 };
+                    u.subUniverse.push_back(std::move(temp));
+                }
+            }
+        }
+    } else {
+        u = singleUniverse;
+    }
+    //printUniverse(u);
+    int iter = 100000; 
+    volumePointMethod(u, iter);
+    std::cout << "\n Line Method\n";
+    volumeLineMethod(u, iter);
+    renderSliceASCII(u, SliceAxis::Z, 0.0, 100, 50);
+    
+    // number indicates geometry file
+    // volume calculation for:
+    // 1     - Fuel pin slide 13 -- Success/Documented : All volumes slightly too large
+    // 2     - Hollow cylinder slide 25 -- Success/Documented
+    // 3     - Square lattice -- Success
+    // 4     - Hex prism -- Success
+    // 5     - Elliptical Torus -- Success : Line gives bad Size
+
+    // Visualization for:
+    // 6     - Translations and rotations -- Success
+    // 7     - Hex lattices -- Success
+
+}
