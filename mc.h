@@ -94,6 +94,7 @@ typedef struct Geometry{
     std::vector<Shape> shapes;
     int shape; // Defines the possible shape, tabled elsewhere
     int nodeRoot;
+    std::vector<Material> mats; // Vector for storing the material that this geometry is made of
     std::vector<Node> nodes; // Set of operations that define the shape of Geometry
     // binary tree of intersections etc to define the shape fully
 } Geometry;
