@@ -16,11 +16,14 @@
 #include <cstring>
 #include <cctype>
 
+//#define M_PI 3.14159265358979323846
+
 // cl /std:c++17 /Od /Zi /FS /RTC1 /EHsc /MDd mc2.cpp /Fe:mc2.exe
 
 constexpr double kB = 8.617333262e-11;
 constexpr double th = 2.5e-8;
-constexpr double M_PI = 3.14159265358979323846;
+constexpr double MEV_TO_J = 1.602176634e-13;
+constexpr double M_N = 674927498e-27;
 
 size_t pickIndex(const std::vector<double>& cum, double u) {
     auto it = std::upper_bound(cum.begin(), cum.end(), u);
@@ -283,7 +286,10 @@ double sigmaTot(const std::vector<Material>& mats, double E, const std::vector<i
     return S;
 }
 
-double neutronSpeed(double E){ return std::sqrt(std::max(0.0, 2.0*E)); }
+double neutronSpeed(double E) {  // Nonrelativistic, as max(E) around 2MeV
+    const double E_J = E * MEV_TO_J;
+    return std::sqrt(std::max(0.0, 2.0*E_J / M_N)); // Returning m/s
+}
 
 bool isThermal(double E, const Material& m){
     return E <= 3.0 * kB * m.T;   // 3kT band; tighten to 1kT if needed
@@ -607,7 +613,8 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
             iterations, std::vector<std::vector<int>>(mats.size(), std::vector<int>(MTs.size(), 0)));
 
     std::vector<FourTally> fourFV(iterations);
-    TimeHist timeHist(1e-2, 1000);
+    //TimeHist timeHist(1e-2, 1000);
+    TimeHist timeHist(1e-11, 1000);
     std::deque<Neutron> bank;
     std::vector<double> matCum;
     std::vector<int> rxLabels;
@@ -631,7 +638,8 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
             const double sTot = sigmaTot(mats, E, MTs);
             if (sTot <= 0.0) { ++i; continue; }
             const double xi = randomVal();
-            const double path = -std::log(xi) / sTot;
+
+            const double path = -std::log(xi) / (sTot * 1e-2); // Correction to m instead of cm
             const double v = neutronSpeed(E);
             n.time += (v > 0.0 ? path / v : 0.0);
             buildMaterialCum(mats, E, MTs, matCum, matTotal);
@@ -713,27 +721,10 @@ SimRes simulation(int nNeutrons, double energy, int iterations, int maxSteps, in
     return simRes;
 }
 
-int insideShape(Neutron n, Shape shape) {
-    // code both for torus and quadratic
-}
-
-std::vector<float> distanceToGeometry(Neutron n, Geometry g) {
-    //
-    
-}
-
-Geometry readGeometry() {
-    // Reads an individual line of the constituents of 
-}
-
-Universe readUniverseFile() {
-    //
-}
-
 
 
 int main() {
-    std::ifstream file("geometry.txt");
+    std::ifstream file("inputs/input7.txt");
     if (!file) {
         std::cerr << "File opening failed\n";
         return 1;
@@ -748,7 +739,7 @@ int main() {
         char command[32];
         int nNeutrons, iterations, nMaterials, maxSteps, inelastic;
         float energy;
-        if (std::sscanf(line.c_str(), "%31s %d %f %d %d %d %d", 
+        if (std::sscanf(line.c_str(), "%31s %d %f %d %d %d %d",
         command, &nNeutrons, &energy, &iterations, &nMaterials, &maxSteps, &inelastic) == 7) {
             // Standard simulation for standard parameters
             if (std::strcmp(command, "simulation") == 0) {
@@ -857,21 +848,6 @@ int main() {
                     meankeff[pctFuel] = ff.keff;
                 }
                 storeDatakeff(meankeff);
-            }
-        } else if (std::sscanf(line.c_str(), "%31s", command) == 1) {
-            Universe universe;
-            if (std::strcmp(command, "geometry") == 0) {
-                // begin understanding geometry
-
-                universe = readUniverseFile(&universe, )
-
-
-
-
-
-
-
-
             }
         } else {
             std::cout << "Command fail: " << line << '\n';

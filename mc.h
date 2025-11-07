@@ -73,13 +73,13 @@ typedef struct Neutron{
     bool reachedTh;
     bool isSource;
 } Neutron;
-
+/*
 // A collection of Universes and Geometries
 typedef struct Universe{
     std::string name;
     std::array<double, 3> pos{0.f, 0.f, 0.f};
     std::array<double, 3> rot{0.f, 0.f, 0.f}; // Always keep these 0, Universes are not rotatable. 
-    std::array<double, 3> boundDim{0.f, 0.f 0.f}; // Bounding box construction args
+    std::array<double, 3> boundDim{0.f, 0.f, 0.f}; // Bounding box construction args
     Geometry boundingGeometry; // Universe bounding box
     int universeShape; // Defines how the Universe Bounding box is constructed
     std::array<int, 2> lattice{0, 0}; // Only valid for square or hex major Universes
@@ -111,7 +111,7 @@ typedef struct Node{
   int left;    // child index or -1
   int right;   // child index or -1
 } Node;
-
+*/
 double randomVal(float min = 0.f, float max = 1.f);
 
 
