@@ -1,6 +1,7 @@
 #include "mc.h"
 #include "mc3m.cpp"
 #include "mc2m.cpp"
+#include "io.cpp"
 #include <sstream>
 #include <fstream>
 #include <iostream>
@@ -61,78 +62,145 @@ It is assumed that the simulated population size is divided into a number of equ
 batches. The statistical estimators (mean + standard deviation) are collected by averaging over the batch-wise results.
 */
 
-int main() {
-    std::ifstream file("inputs/input7.txt");
-    if (!file) {
-        std::cerr << "File opening failed\n";
-        return 1;
-    }
+StatsOut computeStats(const std::vector<std::vector<std::vector<int>>>& statM) {
+    const size_t I = statM.size();
+    const size_t M = I? statM[0].size() : 0;
+    const size_t R = (M? statM[0][0].size() : 0);
+    StatsOut out;
+    out.mean.assign(M, std::vector<double>(R, 0.0));
+    out.relErr.assign(M, std::vector<double>(R, 0.0));
+    out.sum.assign(M, std::vector<int>(R, 0));
 
-    auto x = logspace(-11.0, std::log10(20.0), 500); // same x values for all simulations
-
-    std::string line;
-
-    
-    while (std::getline(file, line)) {
-        char command[32];
-        int nNeutrons, iterations, nMaterials, maxSteps, inelastic;
-        float energy;
-        if (std::sscanf(line.c_str(), "%31s %d %f %d %d %d %d",
-        command, &nNeutrons, &energy, &iterations, &nMaterials, &maxSteps, &inelastic) == 7) {
-            // Standard simulation for standard parameters
-            if (std::strcmp(command, "simulation") == 0) {
-                // Read and store all material information for given material
-                const std::vector<int> MTs = inelastic ? std::vector<int>{2,4,18,102}
-                                       : std::vector<int>{2,18,102};
-                std::vector<Material> mats;
-                mats.reserve(nMaterials);
-                for (int i = 0; i < nMaterials; ++i) {
-                    if (!std::getline(file, line)) {
-                        std::cerr << "Missing material spec line " << i << "\n";
-                        return 1;
-                    }
-                    char fname[32];
-                    double rho, relativeMoles;
-                    if (std::sscanf(line.c_str(), "%31s %lf %lf", fname, &rho, &relativeMoles) == 3) {
-                        Material mat;
-                        mat.rho = rho;
-                        mat.proportion = relativeMoles;
-                        std::string path = std::string("data/") + fname + ".dat";
-                        std::ifstream materialdata(path);
-                        if (!readMaterialBlock(materialdata, mat)) {
-                            std::cerr << "Block read fail " << i << "\n";
-                        }
-                        mats.push_back(std::move(mat));
-                    }
-                }
-                std::vector<std::string> matNames; matNames.reserve(mats.size());
-                for (auto& m : mats) matNames.push_back(m.sym);
-                fillData(mats, x, inelastic);
-
-                SimRes simRes = simulation(nNeutrons, energy, iterations, maxSteps, inelastic, mats);
-                
-                StatsOut matrixStats = computeStats(simRes.statM);
-                std::vector<double> collisionEnergy = computeColEnergy(simRes.collisions);
-                double meanF = calMeanF(simRes.fNeutrons, nNeutrons);
-                
-                FourFactors ff = averageFour(simRes.fVec);
-
-                printStatsOut(matrixStats, matNames, MTs);
-                std::cout << "Average Neutrons Produced " << meanF << "\n"; 
-                printFF(ff);
-                storeDataCol(collisionEnergy);
-                storeTimeHist(simRes.timeHist);
-
-            } else {
-                std::cout << "Command fail: " << line << '\n';
+    for (size_t m=0; m<M; ++m) {
+        for (size_t r=0; r<R; ++r) {
+            long long S = 0; long double Q = 0.0L;
+            for (size_t i=0; i<I; ++i) {
+                int c = statM[i][m][r];
+                S += c;
+                Q += 1.0L * c * c;
             }
-    }}
-
-    
-    return 1;
+            const double N = double(I);
+            const double mu = (I? double(S)/N : 0.0);
+            const double var = (I>1)? double((Q - (1.0L*S*S)/N) / (N - 1.0)) : 0.0;
+            const double se = (I>0)? std::sqrt(std::max(0.0, var) / N) : 0.0;
+            out.sum[m][r] = int(S);
+            out.mean[m][r] = mu;
+            out.relErr[m][r] = (mu>0.0)? se/mu : 0.0;
+        }
+    }
+    return out;
 }
 
-// Using this as the template 
+double calMeanF(const std::vector<int>& fNeutrons, int nNeutrons) {
+    long long S = 0; for (int x : fNeutrons) S += x;
+    const int I = int(fNeutrons.size());
+    return (I > 0 && nNeutrons > 0) ? double(S) / (double(I) * nNeutrons) : 0.0;
+}
+
+FourTally sumFour(const std::vector<FourTally>& v) {
+    FourTally s;
+    for (const auto& x : v) {
+        s.fissionBirthsTotal += x.fissionBirthsTotal;
+        s.fissionBirthsThermal += x.fissionBirthsThermal;
+        s.absThTotal += x.absThTotal;
+        s.absThFuel += x.absThFuel;
+        s.started += x.started;
+        s.reachedThermal += x.reachedThermal;
+        s.resAbsBeforeThermal+= x.resAbsBeforeThermal;
+    }
+    return s;
+}
+
+FourFactors factorsFrom(const FourTally& T) {
+    FourFactors F;
+    F.eta = (T.absThFuel > 0) ? double(T.fissionBirthsThermal)/double(T.absThFuel) : 0.0;
+    F.eps = (T.fissionBirthsThermal > 0) ? double(T.fissionBirthsTotal)/double(T.fissionBirthsThermal) : 0.0;
+    F.p = (T.started > 0) ? double(T.reachedThermal) / double(T.reachedThermal + T.resAbsBeforeThermal) : 0.0;
+    F.f = (T.absThTotal > 0) ? double(T.absThFuel)/double(T.absThTotal) : 0.0;
+    F.keff = F.eta * F.eps * F.p * F.f;
+    return F;
+}
+
+FourFactors averageFour(const std::vector<FourTally>& perIter) {
+    return factorsFrom(sumFour(perIter));
+}
+
+void printStatsOut(const StatsOut& S, const std::vector<std::string>& matNames, const std::vector<int>& MTs, std::ostream& os = std::cout) {
+    const size_t M = S.sum.size();
+    if (!M) { os << "(no data)\n"; return; }
+    const size_t R = S.sum[0].size();
+
+    std::vector<long long> rowTot(M,0), colTot(R,0);
+    long long grand = 0;
+    for (size_t i=0;i<M;++i)
+        for (size_t j=0;j<R;++j){
+            long long v = S.sum[i][j];
+            rowTot[i]+=v; colTot[j]+=v; grand+=v;
+        }
+    auto pct=[&](long long x){ return grand? 100.0*double(x)/double(grand) : 0.0; };
+
+    size_t wName = 4;
+    for (size_t i=0;i<std::min(M,matNames.size());++i) wName = std::max(wName, matNames[i].size());
+    std::vector<size_t> wCol(R, 14);
+    for (size_t j=0;j<R;++j){
+        wCol[j] = std::max(wCol[j], mtLabel(MTs[j]).size());
+        for (size_t i=0;i<M;++i){
+            if (S.sum[i][j]==0) continue;
+            std::ostringstream ss;
+            double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
+            ss << std::setprecision(3) << std::scientific << S.mean[i][j]
+               << " ± " << std::fixed << std::setprecision(1) << rPct << "% "
+               << "(" << S.sum[i][j] << ")";
+            wCol[j] = std::max<size_t>(wCol[j], ss.str().size());
+        }
+    }
+
+    os << "\n=== Statistics ===\n";
+    os << "Total events: " << grand << "\n";
+
+    os << "\n-- By reaction (counts) --\n";
+    for (size_t j=0;j<R;++j)
+        os << std::left << std::setw(int(wCol[j])) << mtLabel(MTs[j]) << "  "
+           << std::right << std::setw(10) << colTot[j] << "  "
+           << std::fixed << std::setprecision(2) << std::setw(6) << pct(colTot[j]) << "%\n";
+
+    os << "\n-- By material (counts) --\n";
+    for (size_t i=0;i<M;++i){
+        const std::string& name = (i<matNames.size()? matNames[i] : ("mat"+std::to_string(i)));
+        os << std::left << std::setw(int(wName)) << name << "  "
+           << std::right << std::setw(10) << rowTot[i] << "  "
+           << std::fixed << std::setprecision(2) << std::setw(6) << pct(rowTot[i]) << "%\n";
+    }
+
+    os << "\n-- Matrix: mean +- relErr% (count) --\n";
+    os << std::left << std::setw(int(wName)) << "" << "  ";
+    for (size_t j=0;j<R;++j)
+        os << std::left << std::setw(int(wCol[j])) << mtLabel(MTs[j]) << "  ";
+    os << "\n";
+
+    for (size_t i=0;i<M;++i){
+        const std::string& name = (i<matNames.size()? matNames[i] : ("mat"+std::to_string(i)));
+        os << std::left << std::setw(int(wName)) << name << "  ";
+        for (size_t j=0;j<R;++j){
+            if (S.sum[i][j]==0) {
+                os << std::left << std::setw(int(wCol[j])) << "-" << "  ";
+            } else {
+                double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
+                std::ostringstream cell;
+                cell << std::setprecision(3) << std::scientific << S.mean[i][j]
+                     << " +- " << std::fixed << std::setprecision(1) << rPct << "% "
+                     << "(" << S.sum[i][j] << ")";
+                os << std::left << std::setw(int(wCol[j])) << cell.str() << "  ";
+            }
+        }
+        os << "\n";
+    }
+}
+
+
+
+
+
 
 int main() {
     std::ifstream file("geometry/geometry.txt");
@@ -184,23 +252,29 @@ int main() {
     } else {
         u = singleUniverse;
     }
+    // Universe Fully built
+
+
+    std::ifstream file("inputs/input7.txt");
+    if (!file) {
+        std::cerr << "File opening failed\n";
+        return 1;
+    }
+
+     // same x values for all simulations
+
+    std::string line;
+
+    
+    
+    // After IO-reading
+
     //printUniverse(u);
+    
     int iter = 100000; 
     volumePointMethod(u, iter);
     std::cout << "\n Line Method\n";
     volumeLineMethod(u, iter);
     renderSliceASCII(u, SliceAxis::Z, 0.0, 100, 50);
-    
-    // number indicates geometry file
-    // volume calculation for:
-    // 1     - Fuel pin slide 13 -- Success/Documented : All volumes slightly too large
-    // 2     - Hollow cylinder slide 25 -- Success/Documented
-    // 3     - Square lattice -- Success
-    // 4     - Hex prism -- Success
-    // 5     - Elliptical Torus -- Success : Line gives bad Size
-
-    // Visualization for:
-    // 6     - Translations and rotations -- Success
-    // 7     - Hex lattices -- Success
 
 }
