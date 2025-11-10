@@ -349,7 +349,7 @@ void transformGeometry(Geometry& g, array<double, 3> pos, array<double, 3> rot) 
 
 std::vector<Material> readMaterial(std::string filename) {
     std::ifstream file("material/" + filename + ".txt");
-    if (!file) { std::cout << "MatFile opening failed\n"; return 1; }
+    if (!file) { std::cout << "MatFile opening failed\n"; }
     int inelastic, nMaterials;
     if (!(file >> inelastic >> nMaterials)) { std::cout << "Failed reading line"; }
     const std::vector<int> MTs = inelastic ? std::vector<int>{2,4,18,102} : std::vector<int>{2,18,102};
@@ -415,7 +415,7 @@ bool readGeometry(std::istream& in, Geometry& g) {
     }
     std::string fname;
     if (!(in >> fname)) { std::cout << "Failed to read material file name"; }
-    g.mats = readMaerial(fname);
+    g.mats = readMaterial(fname);
 
     transformGeometry(g, pos, rot);
     return true;

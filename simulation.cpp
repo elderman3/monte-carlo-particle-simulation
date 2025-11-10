@@ -1,8 +1,35 @@
+#include "mc.h"
+#include <sstream>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <cstdio>
+#include <chrono>
+#include <random>
+#include <cmath>
+#include <map>
+#include <array>
+#include <algorithm>
+#include <deque>
+#include <iomanip>
+#include <cstring>
+#include <cctype>
+#include <stack>
+#include <unordered_map>
+#include <functional>
+#include <limits>
+
+using std::array;
+using std::vector;
+
+
 
 constexpr double kB = 8.617333262e-11;
 constexpr double th = 2.5e-8;
 constexpr double MEV_TO_J = 1.602176634e-13;
 constexpr double M_N = 674927498e-27;
+
 
 size_t pickIndex(const std::vector<double>& cum, double u) {
     auto it = std::upper_bound(cum.begin(), cum.end(), u);

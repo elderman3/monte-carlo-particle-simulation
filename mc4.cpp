@@ -1,6 +1,6 @@
 #include "mc.h"
-#include "mc3m.cpp"
-#include "mc2m.cpp"
+#include "geomops.cpp"
+#include "simulation.cpp"
 #include "io.cpp"
 #include <sstream>
 #include <fstream>
@@ -61,6 +61,16 @@ Demonstration:
 It is assumed that the simulated population size is divided into a number of equal size
 batches. The statistical estimators (mean + standard deviation) are collected by averaging over the batch-wise results.
 */
+
+std::string mtLabel(int mt) {
+    switch (mt) {
+        case 2:   return "MT2 Elastic";
+        case 4:   return "MT4 Inelastic";
+        case 18:  return "MT18 Fission";
+        case 102: return "MT102 Capture";
+        default:  return "MT" + std::to_string(mt);
+    }
+}
 
 StatsOut computeStats(const std::vector<std::vector<std::vector<int>>>& statM) {
     const size_t I = statM.size();
@@ -253,28 +263,58 @@ int main() {
         u = singleUniverse;
     }
     // Universe Fully built
-
-
-    std::ifstream file("inputs/input7.txt");
+    // Start reading commands to execute simulation
+    std::ifstream file("inputs/input.txt");
     if (!file) {
         std::cerr << "File opening failed\n";
         return 1;
     }
+    int nCommands;
+    if (!(file >> nCommands)) {std::cout << "Failed reading commCount"; }
+    std::string command; 
+    int nCount, bCount;
+    bool elastic, viz;
+    double energy;
+    for (int i = 0; i < nCommands; ++i) {
+        if (!(file >> command >> nCount >> bCount >> elastic >> viz >> energy)) { std::cout << "Failed reading parameters"; }
+        if (command == "delta") {
 
-     // same x values for all simulations
+        } else if (command == "surface") {
 
-    std::string line;
+        } else if (command == "criticality") {
+
+        } else if (command == "density") {
+            // Run basic simulation but now calculate density statistics? -> How granular should the grid be and could I use parameters to control this? 
+            
+        } else {
+            std::cout << "Command not valid";
+        }
+        // Printout Statistics, for both estimates etc
+        if (viz) {
+            // Run visualization of density??
+        }
+
+    }
+
+
+    // Simulation must return 
+        // 3d Density 
+        // k-eff values
+        // Estimate models 1 and 2
+            // These effectively require what
 
     
-    
+/*
+Later things
     // After IO-reading
 
     //printUniverse(u);
-    
     int iter = 100000; 
     volumePointMethod(u, iter);
     std::cout << "\n Line Method\n";
     volumeLineMethod(u, iter);
     renderSliceASCII(u, SliceAxis::Z, 0.0, 100, 50);
+
+*/
 
 }

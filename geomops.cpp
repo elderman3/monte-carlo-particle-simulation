@@ -1,3 +1,28 @@
+#include "mc.h"
+#include <sstream>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <cstdio>
+#include <chrono>
+#include <random>
+#include <cmath>
+#include <map>
+#include <array>
+#include <algorithm>
+#include <deque>
+#include <iomanip>
+#include <cstring>
+#include <cctype>
+#include <stack>
+#include <unordered_map>
+#include <functional>
+#include <limits>
+
+using std::array;
+using std::vector;
+
 static double dot3(const array<double,3>& a, const array<double,3>& b){
     return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
 }
@@ -114,8 +139,7 @@ static int solveQuartic(double a,double b,double c,double d,double e,double r[4]
     return k;
 }
 
-vector<double> surfaceDist(const Neutron& n, const Shape& s)
-{
+vector<double> surfaceDist(const Neutron& n, const Shape& s) {
     const double EPS = 1e-10;
     const array<double,3>& P = n.pos;
     const array<double,3>& Dv = n.dir;
