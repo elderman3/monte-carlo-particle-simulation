@@ -1,3 +1,14 @@
+#include "mc.h"
+#include <sstream>
+#include <fstream>
+#include <iostream>
+#include <vector>
+#include <random>
+#include <cmath>
+#include <map>
+#include <array>
+#include <algorithm>
+
 // Materials
 
 bool readMaterialBlock(std::istream& in, Material& mat) {
@@ -355,7 +366,6 @@ std::vector<Material> readMaterial(std::string filename) {
     const std::vector<int> MTs = inelastic ? std::vector<int>{2,4,18,102} : std::vector<int>{2,18,102};
     auto x = logspace(-11.0, std::log10(20.0), 500);
 
-
     std::vector<Material> mats;
     mats.reserve(nMaterials);
     for (int i = 0; i < nMaterials; ++i) {
@@ -480,8 +490,7 @@ std::string timePathkeff() {
     return "output/keff_" + std::to_string(secs) + ".csv";
 }
 
-bool storeDatakeff(const std::vector<double>& data)
-{
+bool storeDatakeff(const std::vector<double>& data) {
     std::ofstream os(timePathkeff());
     if (!os) return false;
     os << std::scientific << std::setprecision(6);
@@ -490,8 +499,7 @@ bool storeDatakeff(const std::vector<double>& data)
     return true;
 }
 
-bool storeDataCol(const std::vector<double>& data)
-{
+bool storeDataCol(const std::vector<double>& data) {
     std::ofstream os(timePathCol());
     if (!os) return false;
     os << std::scientific << std::setprecision(6);
@@ -500,11 +508,29 @@ bool storeDataCol(const std::vector<double>& data)
     return true;
 }
 
-static void storeTimeHist(const TimeHist& H){
+static void storeTimeHist(const TimeHist& H) {
     std::ofstream os(timePathTime());
     os << std::scientific << std::setprecision(6);
     for (int k=0;k<H.nbins;++k){
         const double tmid = (k + 0.5) * H.dt;
         os << tmid << "," << H.counts[k] << "\n";
     }
+}
+
+bool writeVTKStructuredPoints(const Mesh3D& M, const std::vector<double>& field, const std::string& basePath, const std::string& name) {
+    std::string path = "output/" + basePath + ".vtk";
+    std::ofstream os(path);
+    if (!os) return false;
+    os << "# vtk DataFile Version 3.0\n" << name << "\nASCII\nDATASET STRUCTURED_POINTS\n";
+    os << "DIMENSIONS " << M.nx << " " << M.ny << " " << M.nz << "\n";
+    os << "ORIGIN " << M.pmin[0] << " " << M.pmin[1] << " " << M.pmin[2] << "\n";
+    os << "SPACING "
+       << (M.pmax[0]-M.pmin[0])/std::max(1,M.nx-1) << " "
+       << (M.pmax[1]-M.pmin[1])/std::max(1,M.ny-1) << " "
+       << (M.pmax[2]-M.pmin[2])/std::max(1,M.nz-1) << "\n";
+    const int N = std::max(1, M.nx*M.ny*M.nz);
+    os << "POINT_DATA " << N << "\n";
+    os << "SCALARS " << name << " double 1\nLOOKUP_TABLE default\n";
+    for (int k=0;k<N;++k) os << field[k] << "\n";
+    return true;
 }

@@ -72,6 +72,17 @@ std::string mtLabel(int mt) {
     }
 }
 
+Mesh3D makeMeshFromUniverse(const Universe& U, int nx,int ny,int nz) {
+    extern std::array<double,3> boundingBox(Universe& u);
+    Universe tmp = U;
+    auto ext = boundingBox(tmp); // sizes
+    Mesh3D M; M.nx=nx; M.ny=ny; M.nz=nz;
+    M.pmin = {-0.5*ext[0], -0.5*ext[1], -0.5*ext[2]};
+    M.pmax = {+0.5*ext[0], +0.5*ext[1], +0.5*ext[2]};
+    M.zero();
+    return M;
+}
+
 StatsOut computeStats(const std::vector<std::vector<std::vector<int>>>& statM) {
     const size_t I = statM.size();
     const size_t M = I? statM[0].size() : 0;
@@ -207,18 +218,13 @@ void printStatsOut(const StatsOut& S, const std::vector<std::string>& matNames, 
     }
 }
 
-
-
-
-
-
 int main() {
-    std::ifstream file("geometry/geometry.txt");
-    if (!file) { std::cout << "File opening failed\n"; return 1; }
+    std::ifstream gfile("geometry/geometry.txt");
+    if (!gfile) { std::cout << "File opening failed\n"; return 1; }
     Universe u; // This universe is used in all further calculations, where the possible lattice will be constructed 
     Universe singleUniverse;
     std::string line;
-    if (!readUniverseFile(file, singleUniverse)) { std::cout << "Failed reading Universe"; return 1; }
+    if (!readUniverseFile(gfile, singleUniverse)) { std::cout << "Failed reading Universe"; return 1; }
     if (singleUniverse.latticeType) {
         if (singleUniverse.latticeType == 1) {
             const int cols = singleUniverse.lattice[0];
@@ -241,7 +247,6 @@ int main() {
             const int cols = singleUniverse.lattice[0];
             const int rows = singleUniverse.lattice[1];
             if (cols <= 0 || rows <= 0) return 1;
-            
             double t = singleUniverse.boundDim[0];
             double d = t * std::sqrt(3);
             double lat = 1.5 * t; 
@@ -264,46 +269,49 @@ int main() {
     }
     // Universe Fully built
     // Start reading commands to execute simulation
-    std::ifstream file("inputs/input.txt");
-    if (!file) {
-        std::cerr << "File opening failed\n";
-        return 1;
-    }
+    std::ifstream cfile("inputs/input.txt");
+    if (!cfile) { std::cerr << "File opening failed\n"; return 1; }
     int nCommands;
-    if (!(file >> nCommands)) {std::cout << "Failed reading commCount"; }
+    if (!(cfile >> nCommands)) {std::cout << "Failed reading commCount"; return 1; }
     std::string command; 
     int nCount, bCount;
     bool elastic, viz;
-    double energy;
+    double energy; double sx=0,sy=0,sz=0; // Source positions if applicable
     for (int i = 0; i < nCommands; ++i) {
-        if (!(file >> command >> nCount >> bCount >> elastic >> viz >> energy)) { std::cout << "Failed reading parameters"; }
+        if (!(cfile >> command >> nCount >> bCount >> elastic >> viz >> energy)) { std::cout << "Failed reading parameters"; return 1; }
+        if (cfile.peek()==' ') (void)(cf >> sx >> sy >> sz);
+        RunParams P;
+        P.historiesPerBatch = nCount; P.batches = bCount; P.inelastic = inelastic; P.sourceE = energy;
+        P.sourcePos = {sx,sy,sz}; P.maxSteps = 100000;
+        Mesh3D mesh = makeMeshFromUniverse(root, 60, 60, 60);
+        P.mesh = &mesh;
         if (command == "delta") {
-
+            P.track = Tracking::Delta; P.src = SourceMode::External;
+            auto R = runExternal(root, P);
+            auto S = computeStats(R.T.statM);
+            std::cout << "\n[External | Delta-tracking] results\n"; printStatsOut(S, R.T.matNames, rxList(P.inelastic), std::cout);
+            if (viz) {
+                writeVTKStructuredPoints(mesh, mesh.cfe_density, "density_cfe", "density_cfe");
+            }
         } else if (command == "surface") {
-
+            P.track = Tracking::Surface; P.src = SourceMode::External;
+            auto R = runExternal(root, P);
+            auto S = computeStats(R.T.statM);
+            std::cout << "\n[External | Surface-tracking] results\n"; printStatsOut(S, R.T.matNames, rxList(P.inelastic), std::cout);
+            if (viz) {
+                writeVTKStructuredPoints(mesh, mesh.cfe_density, "density_cfe", "density_cfe");
+                writeVTKStructuredPoints(mesh, mesh.tle_density, "density_tle", "density_tle");
+            }
         } else if (command == "criticality") {
-
-        } else if (command == "density") {
-            // Run basic simulation but now calculate density statistics? -> How granular should the grid be and could I use parameters to control this? 
-            
+            P.track = Tracking::Surface; P.src = SourceMode::Criticality;
+            auto R = runCriticality(root, P, 5);
+            storeDatakeff(R.keff_history);
+            std::cout << "\n[Criticality] keff history written. Mean ~ "
+                      << std::accumulate(R.keff_history.begin(), R.keff_history.end(), 0.0)/std::max<size_t>(1, R.keff_history.size()) << "\n";
         } else {
             std::cout << "Command not valid";
         }
-        // Printout Statistics, for both estimates etc
-        if (viz) {
-            // Run visualization of density??
-        }
-
     }
-
-
-    // Simulation must return 
-        // 3d Density 
-        // k-eff values
-        // Estimate models 1 and 2
-            // These effectively require what
-
-    
 /*
 Later things
     // After IO-reading

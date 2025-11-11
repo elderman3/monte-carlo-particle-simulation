@@ -23,25 +23,25 @@
 using std::array;
 using std::vector;
 
-static double dot3(const array<double,3>& a, const array<double,3>& b){
+double dot3(const array<double,3>& a, const array<double,3>& b){
     return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
 }
-static inline array<double,3> add3(const array<double,3>& a,const array<double,3>& b){return{a[0]+b[0],a[1]+b[1],a[2]+b[2]};}
-static inline array<double,3> sub3(const array<double,3>& a,const array<double,3>& b){return{a[0]-b[0],a[1]-b[1],a[2]-b[2]};}
-static array<double,3> cross3(const array<double,3>& a, const array<double,3>& b){
+inline array<double,3> add3(const array<double,3>& a,const array<double,3>& b){return{a[0]+b[0],a[1]+b[1],a[2]+b[2]};}
+inline array<double,3> sub3(const array<double,3>& a,const array<double,3>& b){return{a[0]-b[0],a[1]-b[1],a[2]-b[2]};}
+array<double,3> cross3(const array<double,3>& a, const array<double,3>& b){
     return {a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]};
 }
-static array<double,3> normed(const array<double,3>& v){
+array<double,3> normed(const array<double,3>& v){
     double L = std::sqrt(dot3(v,v));
     if (L==0.0) return {0,0,0};
     return {v[0]/L, v[1]/L, v[2]/L};
 }
 
-static array<double,3> madd(const array<double,3>& p, const array<double,3>& d, double s){
+array<double,3> madd(const array<double,3>& p, const array<double,3>& d, double s){
     return {p[0]+s*d[0], p[1]+s*d[1], p[2]+s*d[2]};
 }
 
-static int solveQuadratic(double A,double B,double C,double r[2]){
+int solveQuadratic(double A,double B,double C,double r[2]){
     const double EPS=1e-14;
     if (std::abs(A) < EPS){
         if (std::abs(B) < EPS) return 0;
@@ -58,7 +58,7 @@ static int solveQuadratic(double A,double B,double C,double r[2]){
     return (disc==0.0)?1:2;
 }
 
-static int solveCubicMonic(double a,double b,double c,double r[3]){
+int solveCubicMonic(double a,double b,double c,double r[3]){
     const double TWOPI=6.28318530717958647692;
     const double EPS=1e-14;
     double a3 = a/3.0;
@@ -89,7 +89,7 @@ static int solveCubicMonic(double a,double b,double c,double r[3]){
     }
 }
 
-static int solveQuartic(double a,double b,double c,double d,double e,double r[4]){
+int solveQuartic(double a,double b,double c,double d,double e,double r[4]){
     const double EPS=1e-14;
     if (std::abs(a) < EPS){
         if (std::abs(b) < EPS){
@@ -225,7 +225,7 @@ vector<double> surfaceDist(const Neutron& n, const Shape& s) {
     return out;
 }
 
-static bool insideLeaf(const Shape& s, const array<double,3>& P){
+bool insideLeaf(const Shape& s, const array<double,3>& P){
     if (!s.torus){
         const double x=P[0], y=P[1], z=P[2];
         const double f = s.A*x*x + s.B*y*y + s.C*z*z
@@ -376,13 +376,13 @@ array<double, 3> boundingBox(Universe& u) {
     return { 0.f, 0.f, 0.f};
 }
 
-static array<double,3> squareCellCenter(const Universe& u, int i, int j){
+array<double,3> squareCellCenter(const Universe& u, int i, int j){
     const int nx=u.lattice[0], ny=u.lattice[1];
     const double pitchX=u.boundDim[0], pitchY=u.boundDim[1];
     const double cx=0.5*(nx-1)*pitchX, cy=0.5*(ny-1)*pitchY;
     return { i*pitchX - cx, j*pitchY - cy, 0.0 };
 }
-static array<double,3> hexCellCenter(const Universe& u, int q, int r){
+array<double,3> hexCellCenter(const Universe& u, int q, int r){
     const double sX=0.5*u.boundDim[0];
     const double sY=(u.boundDim[1]>0.0)?(u.boundDim[1]/std::sqrt(3.0)):sX;
     const double s = std::max(1e-9,(sX>0&&sY>0)?std::min(sX,sY):std::max(sX,sY));
@@ -395,7 +395,7 @@ static array<double,3> hexCellCenter(const Universe& u, int q, int r){
     return {x,y,0.0};
 }
 
-static void tallyPointRecursive(const Universe& u, const array<double,3>& pLocal, std::unordered_map<const Geometry*, long long>& hits) {
+void tallyPointRecursive(const Universe& u, const array<double,3>& pLocal, std::unordered_map<const Geometry*, long long>& hits) {
     for (const Geometry& g : u.geometries){
         if (pointInGeom(pLocal, g)) ++hits[&g];
     }
@@ -405,7 +405,7 @@ static void tallyPointRecursive(const Universe& u, const array<double,3>& pLocal
     }
 }
 
-static void collectGeometries(const Universe& u,
+void collectGeometries(const Universe& u,
                               const std::string& prefix,
                               std::vector<std::pair<const Geometry*, std::string>>& out)
 {
@@ -420,11 +420,11 @@ static void collectGeometries(const Universe& u,
 
 inline double nowSec(){
     using clock=std::chrono::high_resolution_clock;
-    static const auto t0=clock::now();
+    const auto t0=clock::now();
     return std::chrono::duration<double>(clock::now()-t0).count();
 }
 
-static double relFOM(double mean, double stdErr, double seconds) {
+double relFOM(double mean, double stdErr, double seconds) {
     if (mean<=0.0 || stdErr<=0.0 || seconds<=0.0) return 0.0;
     const double R = stdErr/mean;
     return 1.0/(R*R*seconds);
@@ -434,6 +434,7 @@ void printStats(std::string str, double mean, double stdErr, double seconds, dou
     const double rel = (mean != 0.0) ? (stdErr / mean) : 0.0;
     std::cout << std::fixed << std::setprecision(6);
     std::cout << str << "\n"
+
               << "  volume_mean   = " << mean   << "\n"
               << "  volume_stdErr = " << stdErr << "\n"
               << "  rel_error     = " << rel    << "\n"
@@ -526,7 +527,7 @@ void volumePointMethod(Universe& u, int iter) {
     }
 }
 
-static double marchLengthOneGeom(const Geometry& g, array<double,3> p0, const array<double,3>& dir, double Ltot) {
+double marchLengthOneGeom(const Geometry& g, array<double,3> p0, const array<double,3>& dir, double Ltot) {
     Neutron ray; ray.pos=p0; ray.dir=dir;
     const double EPS=1e-9;
     double acc=0.0, traveled=0.0;
@@ -547,7 +548,7 @@ static double marchLengthOneGeom(const Geometry& g, array<double,3> p0, const ar
     return acc;
 }
 
-static void tallyLineRecursive(const Universe& u, const array<double,3>& p0_local, const array<double,3>& dir_local, double Ltot, std::unordered_map<const Geometry*, double>& lenSum) {
+void tallyLineRecursive(const Universe& u, const array<double,3>& p0_local, const array<double,3>& dir_local, double Ltot, std::unordered_map<const Geometry*, double>& lenSum) {
     for (const Geometry& g : u.geometries)
         lenSum[&g] += marchLengthOneGeom(g, p0_local, dir_local, Ltot);
 
@@ -558,7 +559,7 @@ static void tallyLineRecursive(const Universe& u, const array<double,3>& p0_loca
 }
 
 void volumeLineMethod(Universe& u, int iter){
-    std::mt19937_64 rng(0xBADC0DE);
+    std::mt19937_64 rng(0x198237123);
     const bool isSquare = (u.latticeType==1);
     const bool isHex = (u.latticeType==2);
 
@@ -662,4 +663,49 @@ void volumeLineMethod(Universe& u, int iter){
 
         printStats("LineVol " + label, mean, stdErr, sec, FOM);
     }
+}
+
+double sigmaTot_mix(const std::vector<Material>& mats, double E, const std::vector<int>& mts_total) {
+    extern double sigmaTot(const std::vector<Material>&, double, const std::vector<int>&);
+    return sigmaTot(mats, E, mts_total);
+}
+
+const Geometry* findGeomAtRecursive(const Universe& u, const std::array<double,3>& pLocal) {
+    // Preference for child Universes -> Faster
+    for (const Universe& su : u.subUniverse){
+        std::array<double,3> ps = sub3(pLocal, su.pos);
+        if (!pointInGeom(ps, su)) continue;
+        if (auto g = findGeomAtRecursive(su, ps)) return g;
+    }
+    for (auto it = u.geometries.rbegin(); it != u.geometries.rend(); ++it){
+        if (pointInGeom(pLocal, *it)) return &(*it);
+    }
+    return nullptr;
+}
+
+const Geometry* findGeometryAt(const Universe& u, const std::array<double,3>& pWorld) {
+    // universes are not rotated in this project; pos only
+    std::array<double,3> pLocal = sub3(pWorld, u.pos);
+    if (!pointInUniverseLocal(u, pLocal)) return nullptr;
+    if (auto g = findGeomAtRecursive(u, pLocal)) return g;
+    return nullptr;
+}
+
+double macroscopicSigmaAt(const Universe& u, const std::array<double,3>& pWorld, double E, const std::vector<int>& mts_total, const Geometry** gOut) {
+    if (gOut) *gOut = nullptr;
+    const Geometry* g = findGeometryAt(u, pWorld);
+    if (!g) return 0.0;
+    if (gOut) *gOut = g;
+    return sigmaTot_mix(g->mats, E, mts_total);
+}
+
+double majorSigma(const Universe& u, double E, const std::vector<int>& mts_total) {
+    double m = 0.0;
+    // include this universe solids
+    for (const Geometry& g : u.geometries)
+        m = std::max(m, sigmaTot_mix(g.mats, E, mts_total));
+    // recurse children
+    for (const Universe& su : u.subUniverse)
+        m = std::max(m, majorSigma(su, E, mts_total));
+    return m;
 }
