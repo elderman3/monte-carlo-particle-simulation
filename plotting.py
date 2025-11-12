@@ -236,7 +236,7 @@ def printkeff():
 def printHistTime():
     x = []
     y = []
-    with open("output/time_1758854746.csv", "r") as f:
+    with open("output/timehist_external.csv", "r") as f:
         for l in f:
             l = l.rstrip().split(",")
             x.append(float(l[0]))
@@ -247,8 +247,9 @@ def printHistTime():
     plt.ylabel("Collision #")
     plt.plot(x, y)
     plt.yscale("log")
+    plt.xscale("log")
     plt.legend()
     plt.grid(True)
     plt.show()
 
-#printHistTime()
+printHistTime()

@@ -1,14 +1,15 @@
 #include "mc.h"
-#include <sstream>
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <vector>
-#include <random>
-#include <cmath>
-#include <map>
-#include <array>
+#include <string>
+#include <utility>
 #include <algorithm>
+#include <iomanip>
+#include <chrono>
 
+using std::array; using std::vector;
 // Materials
 
 bool readMaterialBlock(std::istream& in, Material& mat) {
@@ -40,14 +41,14 @@ bool readMaterialBlock(std::istream& in, Material& mat) {
     return true;
 }
 
-void fillData(std::vector<Material>& mats, std::vector<double>& x, int inelastic) {
+void fillData(vector<Material>& mats, vector<double>& x, int inelastic) {
     for (auto& m : mats) {
         auto& out1 = m.mt[1];
         auto& out4 = m.mt[4];
         out1.reserve(x.size());
         out4.reserve(x.size());
         // Get all availabe MT values
-        std::vector<int> MTs;
+        vector<int> MTs;
         for (const auto& [k,v] : m.mt) if (k != 1 && k != 4) MTs.push_back(k);
         for (double d : x) {
             double sum1 = 0, sum4 = 0;
@@ -228,7 +229,7 @@ void createTorus(double a, double b, double c, Geometry& g) {
 using CreateFn = void(*)(double,double,double,Geometry&);
 
 static const vector<CreateFn> kCreateById = {
-  nullptr,            // 0 = GENERAL (handled specially)
+  nullptr,            // 0 = general, special handling
   &createBall,        // 1
   &createCylinder,    // 2
   &createCylinderOpen,// 3
@@ -241,7 +242,7 @@ static const vector<CreateFn> kCreateById = {
 
 int readNodeDef(std::string& str, vector<Node>& nodes) {
     vector<int> st;
-    auto push = [&](Node n){ nodes.push_back(n); st.push_back((int)nodes.size()-1); };
+    auto push = [&](Node n) { nodes.push_back(n); st.push_back((int)nodes.size()-1); };
 
     std::istringstream iss(str);
     std::string tok;
@@ -358,23 +359,23 @@ void transformGeometry(Geometry& g, array<double, 3> pos, array<double, 3> rot) 
     }
 }
 
-std::vector<Material> readMaterial(std::string filename) {
+vector<Material> readMaterial(std::string filename) {
     std::ifstream file("material/" + filename + ".txt");
     if (!file) { std::cout << "MatFile opening failed\n"; }
     int inelastic, nMaterials;
-    if (!(file >> inelastic >> nMaterials)) { std::cout << "Failed reading line"; }
-    const std::vector<int> MTs = inelastic ? std::vector<int>{2,4,18,102} : std::vector<int>{2,18,102};
+    if (!(file >> inelastic >> nMaterials)) { std::cout << "Failed reading line for mat properties\n"; }
+    const vector<int> MTs = inelastic ? vector<int>{2,4,18,102} : vector<int>{2,18,102};
     auto x = logspace(-11.0, std::log10(20.0), 500);
 
-    std::vector<Material> mats;
+    vector<Material> mats;
     mats.reserve(nMaterials);
     for (int i = 0; i < nMaterials; ++i) {
         std::string fname; double rho, relativeMoles; 
-        if (!(file >> fname >> rho >> relativeMoles)) { std::cout << "Failed reading material properties"; }
+        if (!(file >> fname >> rho >> relativeMoles)) { std::cout << "Failed reading material properties\n"; }
         Material mat;
         mat.rho = rho;
         mat.proportion = relativeMoles;
-        std::string path = std::string("data/") + fname + ".dat";
+        std::string path = "data/" + fname + ".dat";
         std::ifstream materialdata(path);
         if (!readMaterialBlock(materialdata, mat)) {
             std::cerr << "Block read fail " << i << "\n";
@@ -401,7 +402,7 @@ bool readGeometry(std::istream& in, Geometry& g) {
         }
 
         g.shape = 0;
-        std::vector<Node> nodes;
+        vector<Node> nodes;
         g.nodeRoot = readNodeDef(nodeLine, nodes);
         g.nodes = std::move(nodes);
     } else if (command == "ball") {
@@ -490,7 +491,7 @@ std::string timePathkeff() {
     return "output/keff_" + std::to_string(secs) + ".csv";
 }
 
-bool storeDatakeff(const std::vector<double>& data) {
+bool storeDatakeff(const vector<double>& data) {
     std::ofstream os(timePathkeff());
     if (!os) return false;
     os << std::scientific << std::setprecision(6);
@@ -499,7 +500,7 @@ bool storeDatakeff(const std::vector<double>& data) {
     return true;
 }
 
-bool storeDataCol(const std::vector<double>& data) {
+bool storeDataCol(const vector<double>& data) {
     std::ofstream os(timePathCol());
     if (!os) return false;
     os << std::scientific << std::setprecision(6);
@@ -511,13 +512,13 @@ bool storeDataCol(const std::vector<double>& data) {
 static void storeTimeHist(const TimeHist& H) {
     std::ofstream os(timePathTime());
     os << std::scientific << std::setprecision(6);
-    for (int k=0;k<H.nbins;++k){
+    for (int k=0;k<H.nbins;++k) {
         const double tmid = (k + 0.5) * H.dt;
         os << tmid << "," << H.counts[k] << "\n";
     }
 }
 
-bool writeVTKStructuredPoints(const Mesh3D& M, const std::vector<double>& field, const std::string& basePath, const std::string& name) {
+bool writeVTKStructuredPoints(const Mesh3D& M, const vector<double>& field, const std::string& basePath, const std::string& name) {
     std::string path = "output/" + basePath + ".vtk";
     std::ofstream os(path);
     if (!os) return false;
