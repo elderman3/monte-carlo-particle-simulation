@@ -1,0 +1,2 @@
+core_n007 0 0 0 0 0 0 0 1 0 21.42 21.42 366 5
+aintree2/assembly_reflector 0 0 0 0 0 0

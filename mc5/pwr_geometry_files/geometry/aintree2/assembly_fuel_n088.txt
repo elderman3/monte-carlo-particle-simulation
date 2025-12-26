@@ -1,0 +1,3 @@
+assembly_fuel_n088 0 0 0 0 0 0 0 2 0 1.26 2.52 366 5
+aintree2/pin_fuel 0 -0.63 0 0 0 0
+aintree2/pin_fuel 0 0.63 0 0 0 0

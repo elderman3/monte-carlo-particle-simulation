@@ -1,0 +1,2 @@
+assembly_reflector_n006 0 0 0 0 0 0 0 1 0 1.26 1.26 366 5
+oct8/pin_water 0 0 0 0 0 0

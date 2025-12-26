@@ -1,0 +1,3 @@
+assembly_fuel_n111 0 0 0 0 0 0 0 2 0 2.52 2.52 366 5
+aintree2/assembly_fuel_n112 -0.63 0 0 0 0 0
+aintree2/assembly_fuel_n113 0.63 0 0 0 0 0

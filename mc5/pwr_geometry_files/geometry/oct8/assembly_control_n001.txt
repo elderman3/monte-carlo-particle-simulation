@@ -1,0 +1,5 @@
+assembly_control_n001 0 0 0 0 0 0 0 4 0 6.3 6.3 366 5
+oct8/assembly_control_n002 -1.26 -1.26 0 0 0 0
+oct8/assembly_control_n007 -1.26 1.89 0 0 0 0
+oct8/assembly_control_n008 1.89 -1.26 0 0 0 0
+oct8/assembly_control_n009 1.89 1.89 0 0 0 0

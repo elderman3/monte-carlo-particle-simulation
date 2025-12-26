@@ -107,7 +107,7 @@ double neutronSpeed(double E) {
 }
 
 constexpr double EFG = 2e-4;
-void elasticScatter(double En, double A, double TK, double Efg, double& Eout) {
+void elasticScatter(double En, double A, double TK, double Efg) {
     array<double,3> VL{0,0,0};
     const bool use_free_gas = (En < Efg && A <= 10.0);
     if (use_free_gas) {
@@ -125,7 +125,7 @@ void elasticScatter(double En, double A, double TK, double Efg, double& Eout) {
     const double vC_mag = std::sqrt(std::max(0.0, norm2(vC)));
     const array<double,3> vCprime = scaleByC(iso_dir(), vC_mag);
     const array<double,3> vLprime = add(vCprime, VCM);
-    Eout = 0.5 * norm2(vLprime);
+    return 0.5 * norm2(vLprime);
 }
 
 double elasticEnergyStationary(double En, double A) {
@@ -287,6 +287,7 @@ void recordCollision(Collisions& c, int collIdx, double E) {
     if (collIdx >= (int)c.num.size()) { c.num.resize(collIdx + 1, 0); c.sumEnergy.resize(collIdx + 1, 0.0); }
     c.num[collIdx] += 1; c.sumEnergy[collIdx] += E;
 }
+
 bool isFuelSym(const std::string& s) { std::string t; for(unsigned char c: s) { if(std::isalnum(c)) t.push_back((char)std::toupper(c)); } return t=="U235"||t=="U238"||t=="PU239"||t=="PU241"; }
 bool isThermalE(double E, const Material& m) { return E <= 3.0 * kB * m.T; }
 
@@ -309,24 +310,22 @@ double microXS(const Material& m, int mt, double E) {
     return (it==m.mt.end()) ? 0.0 : valueInterp(it->second, E);
 }
 
-double macroXS_comp(const Material& m, int mt, double E) {
+double macroXSComp(const Material& m, int mt, double E) {
     return m.rho * m.proportion * microXS(m, mt, E);
 }
 
-double macroXS_comp_total(const Material& m, double E, const std::vector<int>& mts_total) {
-    double s=0.0; for(int mt: mts_total) s += macroXS_comp(m, mt, E); return s;
+double macroXSCompTotal(const Material& m, double E, const std::vector<int>& mts_total) {
+    double s=0.0; for(int mt: mts_total) s += macroXSComp(m, mt, E); return s;
 }
 
-double macroXS_comp_abs(const Material& m, double E) {
-    return macroXS_comp(m, 102, E) + macroXS_comp(m, 18, E);
+double macroXSCompAbs(const Material& m, double E) {
+    return macroXSComp(m, 102, E) + macroXSComp(m, 18, E);
 }
 
-void scoreCFE_rx_per_material(TallyBook& T, int batch,
-                                            int mi, const Material& m, double E,
-                                            const std::vector<int>& mts_total, double SigmaRef) {
+void scoreCFERxPerMaterial(TallyBook& T, int batch, int mi, const Material& m, double E, const std::vector<int>& mts_total, double SigmaRef) {
     if (SigmaRef <= 0.0) return;
-    const double Stot = macroXS_comp_total(m, E, mts_total);
-    const double Sabs = macroXS_comp_abs(m, E);
+    const double Stot = macroXSCompTotal(m, E, mts_total);
+    const double Sabs = macroXSCompAbs(m, E);
     const int mit = T.matIndex(m);
     if (mit >= 0) {
         T.ensureBatchAll(batch, (int)T.matNames.size());
@@ -335,7 +334,7 @@ void scoreCFE_rx_per_material(TallyBook& T, int batch,
     }
 }
 
-void scoreTLE_segment_per_geom(TallyBook& T, int batch, const Geometry& g0, double E, double segLen, const std::vector<int>& mts_total) {
+void scoreTLESegmentPerGeom(TallyBook& T, int batch, const Geometry& g0, double E, double segLen, const std::vector<int>& mts_total) {
     if (segLen <= 0.0) return;
     T.ensureBatchAll(batch, (int)T.matNames.size());
 
@@ -343,8 +342,8 @@ void scoreTLE_segment_per_geom(TallyBook& T, int batch, const Geometry& g0, doub
     double Stot_mix = 0.0, Sabs_mix = 0.0;
     if (isMixture) {
         for (const Material& m : g0.mats) {
-            Stot_mix += macroXS_comp_total(m, E, mts_total);
-            Sabs_mix += macroXS_comp_abs(m, E);
+            Stot_mix += macroXSCompTotal(m, E, mts_total);
+            Sabs_mix += macroXSCompAbs(m, E);
         }
         if (Stot_mix <= 0.0 && Sabs_mix <= 0.0) return;
     }
@@ -354,8 +353,8 @@ void scoreTLE_segment_per_geom(TallyBook& T, int batch, const Geometry& g0, doub
     if (!isMixture) {
         const Material& m = g0.mats[0];
         const int mi = T.matIndex(m);
-        const double Stot = macroXS_comp_total(m, E, mts_total);
-        const double Sabs = macroXS_comp_abs(m, E);
+        const double Stot = macroXSCompTotal(m, E, mts_total);
+        const double Sabs = macroXSCompAbs(m, E);
         T.tle_Rtot[batch][mi] += L * Stot;
         T.tle_Rabs[batch][mi] += L * Sabs;
         return;
@@ -363,14 +362,14 @@ void scoreTLE_segment_per_geom(TallyBook& T, int batch, const Geometry& g0, doub
 
     for (const Material& m : g0.mats) {
         const int mi = T.matIndex(m);
-        const double Stot_c = macroXS_comp_total(m, E, mts_total);
-        const double Sabs_c = macroXS_comp_abs(m, E);
+        const double Stot_c = macroXSCompTotal(m, E, mts_total);
+        const double Sabs_c = macroXSCompAbs(m, E);
         if (Stot_mix > 0.0) T.tle_Rtot[batch][mi] += L * Stot_c;
         if (Sabs_mix > 0.0) T.tle_Rabs[batch][mi] += L * Sabs_c;
     }
 }
 
-void scoreCFE_density_global(TallyBook& T, int batch, double E, double SigmaRef) {
+void scoreCFEDensityGlobal(TallyBook& T, int batch, double E, double SigmaRef) {
     if (SigmaRef <= 0.0) return;
     const double v = neutronSpeed(E);
     if (v>0.0) { T.ensureBatchAll(batch, (int)T.matNames.size()); T.cfe_global_time[batch] += 1.0/(v*SigmaRef); }
@@ -422,13 +421,13 @@ void walkHistory(const Universe& U, const RunParams& P, int batch, const vector<
                 const double seg_m = fr.traveled * 0.01;
                 n.time += seg_m / n.vel;
                 if (fr.geom && fr.traveled > 0.0) {
-                    scoreTLE_segment_per_geom(T, batch, *fr.geom, n.energy, fr.traveled, MTs_total);
+                    scoreTLESegmentPerGeom(T, batch, *fr.geom, n.energy, fr.traveled, MTs_total);
                 }
                 if (!fr.collided) {
                     if (fr.leaked) { T.ensureBatchAll(batch, (int)T.matNames.size()); ++T.leaks[batch]; if (T.timeHist) T.timeHist->add(n.time); break; }
                     continue;
                 }
-                scoreCFE_density_global(T, batch, n.energy, fr.SigmaLocal);
+                scoreCFEDensityGlobal(T, batch, n.energy, fr.SigmaLocal);
             } else {
                 const double SigmaM = T.SigmaM;
                 fr = deltaFlight(U, n, n.energy, MTs_total, SigmaM, true);
@@ -436,15 +435,15 @@ void walkHistory(const Universe& U, const RunParams& P, int batch, const vector<
                 n.time += seg_m / n.vel;
                 if (fr.leaked) { T.ensureBatchAll(batch, (int)T.matNames.size()); ++T.leaks[batch]; if (T.timeHist) T.timeHist->add(n.time); break; }
                 if (fr.virtualCollision) {
-                    scoreCFE_density_global(T, batch, n.energy, SigmaM);
+                    scoreCFEDensityGlobal(T, batch, n.energy, SigmaM);
                     if (fr.geom) {
                         int mi = pickMaterialIndexAtE(*fr.geom, n.energy, MTs_total);
                         auto kjashd = fr.geom->mats[mi];
-                        if (mi>=0) scoreCFE_rx_per_material(T, batch, mi, fr.geom->mats[mi], n.energy, MTs_total, SigmaM);
+                        if (mi>=0) scoreCFERxPerMaterial(T, batch, mi, fr.geom->mats[mi], n.energy, MTs_total, SigmaM);
                     }
                     continue;
                 }
-                scoreCFE_density_global(T, batch, n.energy, fr.SigmaLocal);
+                scoreCFEDensityGlobal(T, batch, n.energy, fr.SigmaLocal);
             }
             RxSample rx;
             if (!fr.geom || !sampleReactionAtE(*fr.geom, n.energy, MTs_total, MTs_sample, rx)) break;
@@ -454,7 +453,7 @@ void walkHistory(const Universe& U, const RunParams& P, int batch, const vector<
             if (mi>=0 && rj>=0) {
                 T.ensureBatchAll(batch, (int)T.matNames.size());
                 T.statM[batch][mi][rj] += 1;
-                scoreCFE_rx_per_material(T, batch, mi, *rx.mat, n.energy, MTs_total, (P.track==Tracking::Surface)? fr.SigmaLocal : T.SigmaM);
+                scoreCFERxPerMaterial(T, batch, mi, *rx.mat, n.energy, MTs_total, (P.track==Tracking::Surface)? fr.SigmaLocal : T.SigmaM);
             }
             n.collisions++;
             recordCollision(col, n.collisions, n.energy);
@@ -488,7 +487,7 @@ void walkHistory(const Universe& U, const RunParams& P, int batch, const vector<
                 break;
             } else if (rx.mt==2) {
                 double A = rx.mat->a>0? (double)rx.mat->a : std::max(1, rx.mat->z);
-                double Eout; elasticScatter(n.energy, A, rx.mat->T, EFG, Eout);
+                double Eout = elasticScatter(n.energy, A, rx.mat->T, EFG);
                 if (n.isSource && !n.reachedTh && isThermalE(Eout, *rx.mat)) { n.reachedTh=true; ++four.reachedThermal; }
                 n.energy = Eout; n.vel = neutronSpeed(n.energy);
                 continue;
@@ -561,15 +560,6 @@ RunOutputs runExternal(const Universe& U, const RunParams& P) {
     return R;
 }
 
-void printFour(const FourTally&F) {
-    std::cout << F.fissionBirthsTotal << " BirthsTotal" << "\n"
-    << F.fissionBirthsThermal << " BirthsThermal" << "\n"
-    << F.absThTotal << " AbsThermal" << "\n"
-    << F.absThFuel << " AbsFuel" << "\n"
-    << F.started << " Started" << "\n"
-    << F.reachedThermal << " ReachThermal" << "\n"
-    << F.resAbsBeforeThermal << " AbsBefTherm" << "\n";
-}
 RunOutputs runCriticality(const Universe& U, const RunParams& P, int inactive=5) {
     using clk = std::chrono::steady_clock;
     auto t0 = clk::now();
@@ -597,10 +587,8 @@ RunOutputs runCriticality(const Universe& U, const RunParams& P, int inactive=5)
         RunParams Pcycle = P; Pcycle.src = SourceMode::Criticality;
         const int Nk = (int)bank.size();
         walkHistory(U, Pcycle, b, MTs_total, MTs_sample, R.T, R.collisions.back(), four, bank, next, births);
-        //printFour(four);
         const int Nk1 = (int)next.size();
         totalHist += P.historiesPerBatch;
-        //double kcur = (double)births / std::max(1, P.historiesPerBatch);
         double kcur = (Nk>0) ? double(Nk1)/double(Nk) : 0.0;
         R.keff_history.push_back(kcur);
         std::deque<Neutron> newBank;

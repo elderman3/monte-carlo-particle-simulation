@@ -1,0 +1,5 @@
+core_n000 0 0 0 0 0 0 0 4 0 42.84 42.84 366 5
+oct8/assembly_reflector -10.71 -10.71 0 0 0 0
+oct8/assembly_fuel 10.71 -10.71 0 0 0 0
+oct8/assembly_fuel -10.71 10.71 0 0 0 0
+oct8/assembly_control 10.71 10.71 0 0 0 0

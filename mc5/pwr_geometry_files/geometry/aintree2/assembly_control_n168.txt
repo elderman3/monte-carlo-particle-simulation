@@ -1,0 +1,3 @@
+assembly_control_n168 0 0 0 0 0 0 0 2 0 5.04 2.52 366 5
+aintree2/assembly_control_n169 -1.26 0 0 0 0 0
+aintree2/assembly_control_n172 1.26 0 0 0 0 0

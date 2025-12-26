@@ -227,7 +227,6 @@ void createTorus(double a, double b, double c, Geometry& g) {
 }
 
 using CreateFn = void(*)(double,double,double,Geometry&);
-
 static const vector<CreateFn> kCreateById = {
   nullptr,            // 0 = general, special handling
   &createBall,        // 1

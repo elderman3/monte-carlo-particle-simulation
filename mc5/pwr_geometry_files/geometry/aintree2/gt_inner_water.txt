@@ -1,0 +1,3 @@
+gt_inner_water 0 0 0 0 0 0 0 0 1 0.57 366 0 2
+cylinder 0.57 366 0 0 0 0 0 0 0
+water_borated

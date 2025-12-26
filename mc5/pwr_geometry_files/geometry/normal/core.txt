@@ -1,0 +1,10 @@
+core 0 0 0 0 0 0 0 9 0 64.26 64.26 366 5
+normal/assembly_reflector -21.42 -21.42 0 0 0 0
+normal/assembly_fuel 0 -21.42 0 0 0 0
+normal/assembly_reflector 21.42 -21.42 0 0 0 0
+normal/assembly_fuel -21.42 0 0 0 0 0
+normal/assembly_control 0 0 0 0 0 0
+normal/assembly_fuel 21.42 0 0 0 0 0
+normal/assembly_reflector -21.42 21.42 0 0 0 0
+normal/assembly_fuel 0 21.42 0 0 0 0
+normal/assembly_reflector 21.42 21.42 0 0 0 0

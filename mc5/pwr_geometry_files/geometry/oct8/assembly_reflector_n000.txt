@@ -1,0 +1,5 @@
+assembly_reflector_n000 0 0 0 0 0 0 0 4 0 11.34 11.34 366 5
+oct8/assembly_reflector_n001 -2.52 -2.52 0 0 0 0
+oct8/assembly_reflector_n010 -2.52 3.15 0 0 0 0
+oct8/assembly_reflector_n015 3.15 -2.52 0 0 0 0
+oct8/assembly_reflector_n020 3.15 3.15 0 0 0 0

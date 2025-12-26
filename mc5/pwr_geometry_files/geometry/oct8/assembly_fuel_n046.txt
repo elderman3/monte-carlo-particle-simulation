@@ -1,0 +1,5 @@
+assembly_fuel_n046 0 0 0 0 0 0 0 4 0 10.08 11.34 366 5
+oct8/assembly_fuel_n047 -2.52 -2.52 0 0 0 0
+oct8/assembly_fuel_n052 -2.52 3.15 0 0 0 0
+oct8/assembly_fuel_n057 2.52 -2.52 0 0 0 0
+oct8/assembly_fuel_n062 2.52 3.15 0 0 0 0

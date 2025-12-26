@@ -1,0 +1,2 @@
+core_n003 0 0 0 0 0 0 0 1 0 21.42 21.42 366 5
+oct8/assembly_reflector 0 0 0 0 0 0

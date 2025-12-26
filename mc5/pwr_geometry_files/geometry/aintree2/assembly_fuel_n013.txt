@@ -1,0 +1,2 @@
+assembly_fuel_n013 0 0 0 0 0 0 0 1 0 1.26 1.26 366 5
+aintree2/pin_guide 0 0 0 0 0 0

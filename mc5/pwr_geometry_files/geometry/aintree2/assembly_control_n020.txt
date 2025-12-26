@@ -1,0 +1,3 @@
+assembly_control_n020 0 0 0 0 0 0 0 2 0 2.52 3.78 366 5
+aintree2/assembly_control_n021 0 -0.63 0 0 0 0
+aintree2/assembly_control_n024 0 1.26 0 0 0 0

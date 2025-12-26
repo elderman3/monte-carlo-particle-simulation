@@ -1,0 +1,7 @@
+assembly_control_n008 0 0 0 0 0 0 0 6 0 2.52 3.78 366 5
+oct8/pin_fuel -0.63 -1.26 0 0 0 0
+oct8/pin_fuel 0.63 -1.26 0 0 0 0
+oct8/pin_fuel -0.63 0 0 0 0 0
+oct8/pin_fuel 0.63 0 0 0 0 0
+oct8/pin_fuel -0.63 1.26 0 0 0 0
+oct8/pin_fuel 0.63 1.26 0 0 0 0

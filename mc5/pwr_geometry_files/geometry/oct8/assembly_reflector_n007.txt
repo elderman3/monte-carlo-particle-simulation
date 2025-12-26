@@ -1,0 +1,7 @@
+assembly_reflector_n007 0 0 0 0 0 0 0 6 0 3.78 2.52 366 5
+oct8/pin_water -1.26 -0.63 0 0 0 0
+oct8/pin_water 0 -0.63 0 0 0 0
+oct8/pin_water 1.26 -0.63 0 0 0 0
+oct8/pin_water -1.26 0.63 0 0 0 0
+oct8/pin_water 0 0.63 0 0 0 0
+oct8/pin_water 1.26 0.63 0 0 0 0

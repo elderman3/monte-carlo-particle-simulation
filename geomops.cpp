@@ -14,22 +14,15 @@
 
 using std::array; using std::vector;
 
-double dot3(const array<double,3>& a, const array<double,3>& b) {
-    return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
-}
-inline array<double,3> add3(const array<double,3>& a,const array<double,3>& b) {return{a[0]+b[0],a[1]+b[1],a[2]+b[2]};}
-inline array<double,3> sub3(const array<double,3>& a,const array<double,3>& b) {return{a[0]-b[0],a[1]-b[1],a[2]-b[2]};}
-array<double,3> cross3(const array<double,3>& a, const array<double,3>& b) {
-    return {a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]};
-}
+double dot3(const array<double,3>& a, const array<double,3>& b) {return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+array<double,3> add3(const array<double,3>& a,const array<double,3>& b) {return{a[0]+b[0],a[1]+b[1],a[2]+b[2]};}
+array<double,3> sub3(const array<double,3>& a,const array<double,3>& b) {return{a[0]-b[0],a[1]-b[1],a[2]-b[2]};}
+array<double,3> cross3(const array<double,3>& a, const array<double,3>& b) {return {a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]};}
+array<double,3> madd(const array<double,3>& p, const array<double,3>& d, double s) {return {p[0]+s*d[0], p[1]+s*d[1], p[2]+s*d[2]};}
 array<double,3> normed(const array<double,3>& v) {
     double L = std::sqrt(dot3(v,v));
     if (L==0.0) return {0,0,0};
     return {v[0]/L, v[1]/L, v[2]/L};
-}
-
-array<double,3> madd(const array<double,3>& p, const array<double,3>& d, double s) {
-    return {p[0]+s*d[0], p[1]+s*d[1], p[2]+s*d[2]};
 }
 
 int solveQuadratic(double A,double B,double C,double r[2]) {
@@ -403,7 +396,7 @@ void collectGeometries(const Universe& u, const std::string& prefix, vector<std:
         collectGeometries(u.subUniverse[j], prefix + "su[" + std::to_string(j) + "]/", out);
 }
 
-inline double nowSec() {
+double nowSec() {
     using clock = std::chrono::steady_clock;
     static const auto t0 = clock::now();
     return std::chrono::duration<double>(clock::now() - t0).count();
@@ -415,7 +408,7 @@ double relFOM(double mean, double stdErr, double seconds) {
     return 1.0/(R*R*seconds);
 }
 
-void printStats(std::string str, double mean, double stdErr, double seconds, double FOM) {
+void printVolumeStats(std::string str, double mean, double stdErr, double seconds, double FOM) {
     const double rel = (mean != 0.0) ? (stdErr / mean) : 0.0;
     std::cout << std::fixed << std::setprecision(6);
     std::cout << str << "\n"
@@ -508,7 +501,7 @@ void volumePointMethod(Universe& u, int iter) {
         const double mean   = Veffective * p;
         const double stdErr = std::sqrt(std::max(0.0, p*(1.0-p))) * Veffective / std::sqrt(Ntot);
         const double FOM    = relFOM(mean, stdErr, sec);
-        printStats("PointVol " + label, mean, stdErr, sec, FOM);
+        printVolumeStats("PointVol " + label, mean, stdErr, sec, FOM);
     }
 }
 
@@ -646,7 +639,7 @@ void volumeLineMethod(Universe& u, int iter) {
         double sec = t1 - t0;
         double FOM = relFOM(mean, stdErr, sec);
 
-        printStats("LineVol " + label, mean, stdErr, sec, FOM);
+        printVolumeStats("LineVol " + label, mean, stdErr, sec, FOM);
     }
 }
 
@@ -769,12 +762,12 @@ void volumeLineMethodTorus(Universe& u, int iter) {
 
     vector<std::pair<const Geometry*,std::string>> roster;
     collectGeometries(u, "", roster);
-    if (roster.empty()) { printStats("LineVol (none)",0,0,0,0); return; }
+    if (roster.empty()) { printVolumeStats("LineVol (none)",0,0,0,0); return; }
     const Geometry* gp = roster[0].first;
     const std::string label = roster[0].second;
     const Shape* T = nullptr;
     for (const Shape& s : gp->shapes) if (s.torus) { T = &s; break; }
-    if (!T) { printStats("LineVol " + label, 0,0,0,0); return; }
+    if (!T) { printVolumeStats("LineVol " + label, 0,0,0,0); return; }
     const double a = T->A, b = T->B, R = T->C;
     const array<double,3> Cn{T->D, T->E, T->F};
     const array<double,3> Ax{T->G, T->H, T->I};
@@ -823,7 +816,7 @@ void volumeLineMethodTorus(Universe& u, int iter) {
     const double sec    = t1 - t0;
     const double FOM    = relFOM(mean, stdErr, sec);
 
-    printStats("LineVol " + label, mean, stdErr, sec, FOM);
+    printVolumeStats("LineVol " + label, mean, stdErr, sec, FOM);
 }
 
 static bool pointInUniverseLocal(const Universe& u, const array<double,3>& pLocal) {

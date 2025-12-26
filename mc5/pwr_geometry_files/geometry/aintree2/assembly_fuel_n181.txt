@@ -1,0 +1,3 @@
+assembly_fuel_n181 0 0 0 0 0 0 0 2 0 2.52 1.26 366 5
+aintree2/pin_fuel -0.63 0 0 0 0 0
+aintree2/pin_guide 0.63 0 0 0 0 0

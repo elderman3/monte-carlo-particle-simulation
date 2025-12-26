@@ -82,7 +82,8 @@ FourTally sumFour(const vector<FourTally>& v) {
     return s;
 }
 
-FourFactors factorsFrom(const FourTally& T) {
+FourFactors fourFactor(const vector<FourTally>& v) {
+    FourTally T = sumFour(v);
     FourFactors F;
     F.eta = (T.absThFuel > 0) ? double(T.fissionBirthsThermal)/double(T.absThFuel) : 0.0;
     F.eps = (T.fissionBirthsThermal > 0) ? double(T.fissionBirthsTotal)/double(T.fissionBirthsThermal) : 0.0;

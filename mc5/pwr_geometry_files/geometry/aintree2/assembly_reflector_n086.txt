@@ -1,0 +1,3 @@
+assembly_reflector_n086 0 0 0 0 0 0 0 2 0 3.78 2.52 366 5
+aintree2/assembly_reflector_n087 -0.63 0 0 0 0 0
+aintree2/assembly_reflector_n090 1.26 0 0 0 0 0
