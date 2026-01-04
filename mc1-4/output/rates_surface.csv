@@ -1,0 +1,4 @@
+region,analog_coll,analog_abs,cfe_coll,cfe_abs,tle_coll,tle_abs,units
+Water,2.14314e+07,73486,1.75052e+07,70432.3,2.14402e+07,73613.5,1/s
+Air,140,0,140,0.646802,171.025,1.20821,1/s
+Container,122900,14798,122900,14745,122374,14641.8,1/s

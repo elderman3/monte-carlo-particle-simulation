@@ -105,5 +105,6 @@
       ]
     }
   },
-  "terminal.integrated.defaultProfile.windows": "VS2022 Dev Cmd (x64)"
+  "terminal.integrated.defaultProfile.windows": "VS2022 Dev Cmd (x64)",
+  "cmake.sourceDirectory": "C:/Users/emaki/Documents/Code/monte-carlo-particle-simulation/mc5"
 }

@@ -4,40 +4,50 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <unordered_map>
+#include <memory>
+#include <cctype>
 #include <utility>
 #include <algorithm>
 #include <iomanip>
 #include <chrono>
+#include <cmath>
+#include <cstdlib>
+
 
 using std::array; using std::vector;
-using Matrix = vector<vector<double>>;
+using Matrix = vector<vector<float>>;
 using std::cos; using std::sin;
 
 
 // --- MATERIAL READ ---
 
-bool readMaterialBlock(std::istream& in, Material& mat) {
-    if (!(in >> mat.sym >> mat.z >> mat.a >> mat.aw >> mat.T))
+bool readNuclideBlock(std::istream& in, Nuclide& nuc) {
+    if (!(in >> nuc.sym >> nuc.z >> nuc.a >> nuc.aw >> nuc.T))
         return false;
 
     int neu_num;
     if (!(in >> neu_num)) return false;
-    mat.neutrons.reserve(neu_num);
+    nuc.neutrons.clear();
+    nuc.neutrons.reserve(neu_num);
     for (int i=0; i<neu_num; ++i) {
-        double E, nu;
+        float E, nu;
         if (!(in >> E >> nu)) return false;
-        mat.neutrons.emplace_back(E, nu);
+        nuc.neutrons.emplace_back(E, nu);
     }
 
     int mt;
-    double Q;
+    float Q;
     int nc;
+    nuc.mt.clear();
+    nuc.Qvals.clear();
     while (in >> mt >> Q >> nc) {
-        mat.Qvals[mt] = Q;
-        auto& xs = mat.mt[mt];
+        nuc.Qvals[mt] = Q;
+        auto& xs = nuc.mt[mt];
+        xs.clear();
         xs.reserve(nc);
         for (int j=0; j<nc; ++j) {
-            double E, sigma;
+            float E, sigma;
             if (!(in >> E >> sigma)) return false;
             xs.emplace_back(E, sigma);
         }
@@ -45,32 +55,133 @@ bool readMaterialBlock(std::istream& in, Material& mat) {
     return true;
 }
 
-void fillData(vector<Material>& mats, vector<double>& x, int inelastic) {
-    for (auto& m : mats) {
-        auto& out1 = m.mt[1];
-        auto& out4 = m.mt[4];
-        out1.reserve(x.size());
-        out4.reserve(x.size());
-        // Get all availabe MT values
-        vector<int> MTs;
-        for (const auto& [k,v] : m.mt) if (k != 1 && k != 4) MTs.push_back(k);
-        for (double d : x) {
-            double sum1 = 0, sum4 = 0;
-            for (auto mt : MTs) {
-                double val = valueInterp(m.mt[mt], d);
-                if (mt > 50 && mt < 92) {
-                    sum4 += val;
-                } else {
-                    sum1 += val;
-                }
-            }
-            if (!inelastic) {
-                sum1 += sum4;
-            }
-        out1.emplace_back(d, sum1);
-        out4.emplace_back(d, sum4);
-        }
+static void buildDerivedInelasticTotal(Nuclide& nuc, const std::vector<float>& Egrid) {
+    // Build MT4 total inelastic as sum of MT51-91 channels.
+    // This mirrors the previous fillData() behavior but runs once per nuclide.
+    std::vector<int> inel;
+    inel.reserve(64);
+    for (const auto& kv : nuc.mt) {
+        const int mt = kv.first;
+        if (mt > 50 && mt < 92) inel.push_back(mt);
     }
+
+    auto& out4 = nuc.mt[4];
+    out4.clear();
+    out4.reserve(Egrid.size());
+
+    for (float E : Egrid) {
+        float sum4 = 0.0f;
+        for (int mt : inel) {
+            auto it = nuc.mt.find(mt);
+            if (it != nuc.mt.end()) sum4 += valueInterp(it->second, E);
+        }
+        out4.emplace_back(E, sum4);
+    }
+}
+
+
+// --- MATERIAL CACHES ---
+
+namespace {
+    struct MaterialSetRec {
+        int inelastic = 1;
+        std::vector<Material> comps; // lightweight components (nuclide pointer + rho + proportion)
+    };
+
+    // Cache: material-set filename -> set id
+    static std::vector<MaterialSetRec> g_materialSets;
+    static std::unordered_map<std::string,int> g_materialSetByName;
+
+    // Cache: nuclide token (data/<token>.dat) -> unique nuclide data
+    static std::vector<std::unique_ptr<Nuclide>> g_nuclides;
+    static std::unordered_map<std::string,int> g_nuclideByToken;
+
+    static const std::vector<float>& commonEgrid() {
+        static std::vector<float> grid = logspace(-11.0, std::log10(20.0f), 500);
+        return grid;
+    }
+
+    static const Nuclide* loadNuclideCached(const std::string& token) {
+        auto it = g_nuclideByToken.find(token);
+        if (it != g_nuclideByToken.end()) return g_nuclides[it->second].get();
+
+        const std::string path = "data/" + token + ".dat";
+        std::ifstream materialdata(path);
+        if (!materialdata) {
+            std::cerr << "Data file opening failed: " << path << " (referenced by material file)\n";
+            std::exit(EXIT_FAILURE);
+        }
+
+        auto nuc = std::make_unique<Nuclide>();
+        if (!readNuclideBlock(materialdata, *nuc)) {
+            std::cerr << "Block read fail in " << path << "\n";
+            std::exit(EXIT_FAILURE);
+        }
+
+        // Derived MT4 (inelastic sum) on a common E-grid.
+        buildDerivedInelasticTotal(*nuc, commonEgrid());
+
+        const int id = (int)g_nuclides.size();
+        g_nuclides.push_back(std::move(nuc));
+        g_nuclideByToken[token] = id;
+        return g_nuclides[id].get();
+    }
+
+    static inline MatView viewOfMaterialSet(int id) {
+        const auto& v = g_materialSets[id].comps;
+        MatView w; w.ptr = v.empty() ? nullptr : v.data(); w.n = (int)v.size();
+        return w;
+    }
+
+    static int loadMaterialSetCached(const std::string& filename) {
+        auto it = g_materialSetByName.find(filename);
+        if (it != g_materialSetByName.end()) return it->second;
+
+        std::ifstream file("material/" + filename + ".txt");
+        if (!file) {
+            std::cerr << "MatFile opening failed: material/" << filename << ".txt\n";
+            std::exit(EXIT_FAILURE);
+        }
+
+        int inelastic = 1, nMaterials = 0;
+        if (!(file >> inelastic >> nMaterials)) {
+            std::cerr << "Failed reading header from material/" << filename << ".txt\n";
+            std::exit(EXIT_FAILURE);
+        }
+
+        std::vector<Material> comps;
+        comps.reserve(std::max(0, nMaterials));
+
+        for (int i = 0; i < nMaterials; ++i) {
+            std::string token; float rho = 0.0f, relativeMoles = 0.0f;
+            if (!(file >> token >> rho >> relativeMoles)) {
+                std::cerr << "Failed reading material entry " << i << " from material/" << filename << ".txt\n";
+                std::exit(EXIT_FAILURE);
+            }
+
+            const Nuclide* nuc = loadNuclideCached(token);
+            Material m;
+            m.nuc = nuc;
+            m.rho = rho;
+            m.proportion = relativeMoles;
+            comps.push_back(m);
+        }
+
+        MaterialSetRec rec;
+        rec.inelastic = inelastic;
+        rec.comps = std::move(comps);
+
+        const int id = (int)g_materialSets.size();
+        g_materialSets.push_back(std::move(rec));
+        g_materialSetByName[filename] = id;
+        return id;
+    }
+}
+
+MatView readMaterial(const std::string& filename, int* outId = nullptr) {
+    const int id = loadMaterialSetCached(filename);
+    if (outId) *outId = id;
+    return viewOfMaterialSet(id);
 }
 
 // --- GEOMETRY MATH ---
@@ -78,11 +189,11 @@ void fillData(vector<Material>& mats, vector<double>& x, int inelastic) {
 Matrix mmult(const Matrix& a, const Matrix& b) {
     if (a.empty() || b.empty()) throw std::runtime_error("empty matrix\n");
     size_t ai = a.size(); size_t aj = a[0].size(); size_t bi = b.size(); size_t bj = b[0].size();
-    Matrix c(ai, vector<double>(bj, 0.f));
+    Matrix c(ai, vector<float>(bj, 0.f));
     if (aj != bi) throw std::runtime_error("Mismatched Matrices\n");
     for (std::size_t i = 0; i < ai; ++i) {
         for (std::size_t k = 0; k < aj; ++k) {
-            const double aik = a[i][k];
+            const float aik = a[i][k];
             for (std::size_t j = 0; j < bj; ++j) {
                 c[i][j] += aik * b[k][j];
             }
@@ -94,7 +205,7 @@ Matrix mmult(const Matrix& a, const Matrix& b) {
 Matrix msum(const Matrix& a, const Matrix& b) {
     if (a.empty() || b.empty()) throw std::runtime_error("empty matrix\n");
     size_t ai = a.size(); size_t aj = a[0].size(); size_t bi = b.size(); size_t bj = b[0].size();
-    Matrix c(ai, vector<double>(aj, 0.f));
+    Matrix c(ai, vector<float>(aj, 0.f));
     if (ai != bi || aj != bj) throw std::runtime_error("Mismatched Matrices\n");
     for (size_t i = 0; i < ai; ++i) {for (size_t j = 0; j < aj; ++j) {c[i][j] = a[i][j] + b[i][j];}}
     return c;
@@ -102,16 +213,16 @@ Matrix msum(const Matrix& a, const Matrix& b) {
 
 Matrix T(const Matrix& a) {
     size_t ai = a.size(); size_t aj = a[0].size();
-    Matrix c(aj, vector<double>(ai, 0.f));
+    Matrix c(aj, vector<float>(ai, 0.f));
     for (size_t i = 0; i < ai; ++i) {for (size_t j = 0; j < aj; ++j) {c[j][i] = a[i][j];}}
     return c;
 }
 
-void transformGeometry(Geometry& g, array<double, 3> pos, array<double, 3> rot) {
-    double phi = rot[0]; double th = rot[1]; double psi = rot[2]; // x, y, z
-    const double cPsi = cos(psi), sPsi = sin(psi);
-    const double cTh = cos(th),  sTh = sin(th);
-    const double cPhi = cos(phi), sPhi = sin(phi);
+void transformGeometry(Geometry& g, array<float, 3> pos, array<float, 3> rot) {
+    float phi = rot[0]; float th = rot[1]; float psi = rot[2]; // x, y, z
+    const float cPsi = cos(psi), sPsi = sin(psi);
+    const float cTh = cos(th),  sTh = sin(th);
+    const float cPhi = cos(phi), sPhi = sin(phi);
     Matrix R = {
             { cPsi*cTh, cPsi*sTh*sPhi - sPsi*cPhi, cPsi*sTh*cPhi + sPsi*sPhi },
             { sPsi*cTh, sPsi*sTh*sPhi + cPsi*cPhi, sPsi*sTh*cPhi - cPsi*sPhi },
@@ -135,10 +246,10 @@ void transformGeometry(Geometry& g, array<double, 3> pos, array<double, 3> rot) 
                 {s.H/2},
                 {s.I/2}
                     };
-            double c = s.J;
+            float c = s.J;
             Matrix An = mmult(mmult(T(R), A), R);
             Matrix bn = mmult(T(R), msum(mmult(A, t), b));
-            double cn = mmult(mmult(T(t), A), t)[0][0] + 2 * mmult(T(b), t)[0][0] + c;
+            float cn = mmult(mmult(T(t), A), t)[0][0] + 2 * mmult(T(b), t)[0][0] + c;
             s.A=An[0][0]; s.B=An[1][1]; s.C=An[2][2]; s.D=2*An[0][1]; s.E=2*An[1][2]; s.F=2*An[0][2]; s.G=2*bn[0][0]; s.H=2*bn[1][0]; s.I=2*bn[2][0]; s.J=cn;
         } else {
             Matrix c = {
@@ -161,7 +272,7 @@ void transformGeometry(Geometry& g, array<double, 3> pos, array<double, 3> rot) 
 
 // --- GEOMETRY READ ---
 
-using CreateFn = void(*)(double,double,double,Geometry&);
+using CreateFn = void(*)(float,float,float,Geometry&);
 static const vector<CreateFn> kCreateById = {
   nullptr,            // 0 = general, special handling
   &createBall,        // 1
@@ -208,35 +319,8 @@ bool readShape(std::istream& in, Geometry& g) {
     return true;
 }
 
-vector<Material> readMaterial(std::string filename) {
-    std::ifstream file("material/" + filename + ".txt");
-    if (!file) { std::cout << "MatFile opening failed\n"; }
-    int inelastic, nMaterials;
-    if (!(file >> inelastic >> nMaterials)) { std::cout << "Failed reading line for mat properties\n"; }
-    const vector<int> MTs = inelastic ? vector<int>{2,4,18,102} : vector<int>{2,18,102};
-    auto x = logspace(-11.0, std::log10(20.0), 500);
-
-    vector<Material> mats;
-    mats.reserve(nMaterials);
-    for (int i = 0; i < nMaterials; ++i) {
-        std::string fname; double rho, relativeMoles; 
-        if (!(file >> fname >> rho >> relativeMoles)) { std::cout << "Failed reading material properties\n"; }
-        Material mat;
-        mat.rho = rho;
-        mat.proportion = relativeMoles;
-        std::string path = "data/" + fname + ".dat";
-        std::ifstream materialdata(path);
-        if (!readMaterialBlock(materialdata, mat)) {
-            std::cerr << "Block read fail " << i << "\n";
-        }
-        mats.push_back(std::move(mat));
-    }
-    fillData(mats, x, inelastic);
-    return mats; 
-}
-
 bool readGeometry(std::istream& in, Geometry& g) {
-    std::string command; double a, b, c; array<double, 3> pos; array<double, 3> rot;
+    std::string command; float a, b, c; array<float, 3> pos; array<float, 3> rot;
     if (!(in >> command >> a >> b >> c >> pos[0] >> pos[1] >> pos[2] >> rot[0] >> rot[1] >> rot[2])) { std::cout << "Failed reading line1\n"; return false; }
     if (command == "general") {
         int nShapes; 
@@ -275,7 +359,7 @@ bool readGeometry(std::istream& in, Geometry& g) {
     }
     std::string fname;
     if (!(in >> fname)) { std::cout << "Failed to read material file name"; }
-    g.mats = readMaterial(fname);
+    g.mats = readMaterial(fname, &g.matSetId);
 
     transformGeometry(g, pos, rot);
     return true;
@@ -284,7 +368,7 @@ bool readGeometry(std::istream& in, Geometry& g) {
 bool readUniverseFile(std::istream& in, Universe& u) {
     int nSubUniverse; int nGeometry;
     // Read basic universe information
-    array<double, 3> uniBou;
+    array<float, 3> uniBou;
     if (!(in >> u.name >> u.pos[0] >> u.pos[1] >> u.pos[2] >> u.rot[0] >> u.rot[1] >> u.rot[2] 
         >> u.latticeType >> nSubUniverse >> nGeometry >> uniBou[0] >> uniBou[1] >> uniBou[2] >> u.universeShape)) { std::cout << "Failed reading line6\n"; return false; }
     if (!u.universeShape) { std::cout << "Failed reading line4\n"; return false; }
@@ -297,7 +381,7 @@ bool readUniverseFile(std::istream& in, Universe& u) {
     }
     // Read subuniverses
 
-    array<double, 3> SUpos; array<double, 3> SUrot; std::string SUfname;
+    array<float, 3> SUpos; array<float, 3> SUrot; std::string SUfname;
     for (int i = 0; i < nSubUniverse; i++) {
         Universe su;
         if (!(in >> SUfname >> SUpos[0] >> SUpos[1] >> SUpos[2] >> SUrot[0] >> SUrot[1] >> SUrot[2])) { std::cout << "Failed reading line7\n"; return false; }
@@ -318,9 +402,52 @@ bool readUniverseFile(std::istream& in, Universe& u) {
 }
 
 
+// --- STORE HELPERS ---
+
+std::string sanitizeSym(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (unsigned char c : s) {
+        if (std::isalnum(c)) out.push_back((char)std::toupper(c));
+    }
+    return out;
+}
+
+// Coarse geometry/material tagging for visualization
+// 0 = outside/void
+// 1 = water-like
+// 2 = fuel-like
+// 3 = zirconium-like
+// 4 = steel/iron-like
+// 5 = absorber/boron-like
+// 6 = other
+int geometryTag(const Geometry* g) {
+    if (!g) return 0;
+    bool hasH=false, hasO=false, hasU=false, hasPu=false, hasZr=false, hasFe=false, hasB=false, hasC=false;
+    for (const auto& m : g->mats) {
+        const std::string sym = sanitizeSym(m.nuc ? m.nuc->sym : std::string());
+        if (sym.rfind("H",0)==0) hasH=true;
+        if (sym.rfind("O",0)==0) hasO=true;
+        if (sym.rfind("U",0)==0) hasU=true;
+        if (sym.rfind("PU",0)==0) hasPu=true;
+        if (sym.rfind("ZR",0)==0) hasZr=true;
+        if (sym.rfind("FE",0)==0) hasFe=true;
+        if (sym.rfind("B",0)==0) hasB=true;
+        if (sym.rfind("C",0)==0) hasC=true;
+    }
+    if (hasU || hasPu) return 2;
+    if (hasZr) return 3;
+    if (hasFe) return 4;
+    if (hasB) return 5;
+    if (hasH || hasO) return 1;
+    if (hasC) return 5;
+    return 6;
+}
+
+
 // --- STORE DATA ---
 
-bool storeDatakeff(const vector<double>& data) {
+bool storeDatakeff(const vector<float>& data) {
     using clock = std::chrono::system_clock;
     const auto secs = std::chrono::duration_cast<std::chrono::seconds>(clock::now().time_since_epoch()).count();
 
@@ -332,7 +459,7 @@ bool storeDatakeff(const vector<double>& data) {
     return true;
 }
 
-bool writeVTKStructuredPoints(const Mesh3D& M, const vector<double>& field, const std::string& basePath, const std::string& name) {
+bool writeVTKStructuredPoints(const Mesh3D& M, const vector<float>& field, const std::string& basePath, const std::string& name) {
     std::string path = "output/" + basePath + ".vtk";
     std::ofstream os(path);
     if (!os) return false;
@@ -345,16 +472,26 @@ bool writeVTKStructuredPoints(const Mesh3D& M, const vector<double>& field, cons
        << (M.pmax[2]-M.pmin[2])/std::max(1,M.nz-1) << "\n";
     const int N = std::max(1, M.nx*M.ny*M.nz);
     os << "POINT_DATA " << N << "\n";
-    os << "SCALARS " << name << " double 1\nLOOKUP_TABLE default\n";
+    os << "SCALARS " << name << " float 1\nLOOKUP_TABLE default\n";
     for (int k=0;k<N;++k) os << field[k] << "\n";
     return true;
 }
 
-void writeTimeHistCsv(const TimeHist& H, const char* path) {
-    std::ofstream os(path);
-    os << "t_center_s,count\n";
-    for (int k=0;k<H.nbins;++k){
-        double t0 = k*H.dt, t1 = (k+1)*H.dt;
-        os << std::scientific << 0.5*(t0+t1) << "," << H.counts[k] << "\n";
+std::vector<float> buildGeometryTagField(const Mesh3D& M, const Universe& U) {
+    std::vector<float> out((size_t)M.nx * M.ny * M.nz, 0.0f);
+    const float dx = (M.pmax[0] - M.pmin[0]) / (float)M.nx;
+    const float dy = (M.pmax[1] - M.pmin[1]) / (float)M.ny;
+    const float dz = (M.pmax[2] - M.pmin[2]) / (float)M.nz;
+    for (int k=0;k<M.nz;++k) {
+        const float z = M.pmin[2] + (k + 0.5) * dz;
+        for (int j=0;j<M.ny;++j) {
+            const float y = M.pmin[1] + (j + 0.5) * dy;
+            for (int i=0;i<M.nx;++i) {
+                const float x = M.pmin[0] + (i + 0.5) * dx;
+                const Geometry* g = findGeometryAt(U, {x,y,z});
+                out[(size_t)(k*M.ny + j)*M.nx + i] = (float)geometryTag(g);
+            }
+        }
     }
-};
+    return out;
+}

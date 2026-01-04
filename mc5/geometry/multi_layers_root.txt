@@ -1,0 +1,4 @@
+multi_layers_root 0 0 0  0 0 0  0 1 1  8.0 100.0 0  2
+layer01 0 0 0  0 0 0
+cylinder 8.0 100.0 0  0 0 0  0 0 0
+steel

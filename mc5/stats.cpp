@@ -28,25 +28,25 @@ StatsOut computeStats(const vector<vector<vector<int>>>& statM) {
     const size_t M = I? statM[0].size() : 0;
     const size_t R = (M? statM[0][0].size() : 0);
     StatsOut out;
-    out.mean.assign(M, vector<double>(R, 0.0));
-    out.relErr.assign(M, vector<double>(R, 0.0));
+    out.mean.assign(M, vector<float>(R, 0.0f));
+    out.relErr.assign(M, vector<float>(R, 0.0f));
     out.sum.assign(M, vector<int>(R, 0));
 
     for (size_t m=0; m<M; ++m) {
         for (size_t r=0; r<R; ++r) {
-            long long S = 0; long double Q = 0.0L;
+            long long S = 0;  float Q = 0.0f;
             for (size_t i=0; i<I; ++i) {
                 int c = statM[i][m][r];
                 S += c;
                 Q += 1.0L * c * c;
             }
-            const double N = double(I);
-            const double mu = (I? double(S)/N : 0.0);
-            const double var = (I>1)? double((Q - (1.0L*S*S)/N) / (N - 1.0)) : 0.0;
-            const double se = (I>0)? std::sqrt(std::max(0.0, var) / N) : 0.0;
+            const float N = float(I);
+            const float mu = (I? float(S)/N : 0.0f);
+            const float var = (I>1)? float((Q - (1.0L*S*S)/N) / (N - 1.0)) : 0.0f;
+            const float se = (I>0)? std::sqrt(std::max(0.0f, var) / N) : 0.0f;
             out.sum[m][r] = int(S);
             out.mean[m][r] = mu;
-            out.relErr[m][r] = (mu>0.0)? se/mu : 0.0;
+            out.relErr[m][r] = (mu>0.0f)? se/mu : 0.0f;
         }
     }
     return out;
@@ -74,7 +74,7 @@ void printStatsOut(const StatsOut& S, const vector<std::string>& matNames, const
             long long v = S.sum[i][j];
             rowTot[i]+=v; colTot[j]+=v; grand+=v;
         }
-    auto pct=[&](long long x) { return grand? 100.0*double(x)/double(grand) : 0.0; };
+    auto pct=[&](long long x) { return grand? 100.0f*float(x)/float(grand) : 0.0f; };
 
     size_t wName = 4;
     for (size_t i=0;i<std::min(M,matNames.size());++i) wName = std::max(wName, matNames[i].size());
@@ -84,7 +84,7 @@ void printStatsOut(const StatsOut& S, const vector<std::string>& matNames, const
         for (size_t i=0;i<M;++i) {
             if (S.sum[i][j]==0) continue;
             std::ostringstream ss;
-            double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
+            float rPct = std::isfinite(S.relErr[i][j]) ? 100.0f*S.relErr[i][j] : 0.0f;
             ss << std::setprecision(3) << std::scientific << S.mean[i][j]
                << " ± " << std::fixed << std::setprecision(1) << rPct << "% "
                << "(" << S.sum[i][j] << ")";
@@ -122,7 +122,7 @@ void printStatsOut(const StatsOut& S, const vector<std::string>& matNames, const
             if (S.sum[i][j]==0) {
                 os << std::left << std::setw(int(wCol[j])) << "-" << "  ";
             } else {
-                double rPct = std::isfinite(S.relErr[i][j]) ? 100.0*S.relErr[i][j] : 0.0;
+                float rPct = std::isfinite(S.relErr[i][j]) ? 100.0f*S.relErr[i][j] : 0.0f;
                 std::ostringstream cell;
                 cell << std::setprecision(3) << std::scientific << S.mean[i][j]
                      << " +- " << std::fixed << std::setprecision(1) << rPct << "% "
@@ -134,31 +134,31 @@ void printStatsOut(const StatsOut& S, const vector<std::string>& matNames, const
     }
 }
 
-ScalarStat statsFromBatches(const std::vector<double>& x, double elapsed_s) {
+ScalarStat statsFromBatches(const std::vector<float>& x, float elapsed_s) {
     ScalarStat s; s.batches = (int)x.size();
     if (s.batches==0) return s;
-    double mu=0; for(double v:x) mu+=v; mu/=x.size();
-    double var=0; for(double v:x) { double d=v-mu; var+=d*d; }
-    var = (x.size()>1)? var/(x.size()-1) : 0.0;
-    double se = (x.size()>0)? std::sqrt(var / x.size()) : 0.0;
+    float mu=0; for(float v:x) mu+=v; mu/=x.size();
+    float var=0; for(float v:x) { float d=v-mu; var+=d*d; }
+    var = (x.size()>1)? var/(x.size()-1) : 0.0f;
+    float se = (x.size()>0)? std::sqrt(var / x.size()) : 0.0f;
     s.mean = mu;
     s.stddev = std::sqrt(var);
-    s.relErr = (mu!=0.0)? (se/std::abs(mu)) : 0.0;
-    s.fom = (elapsed_s>0.0 && s.relErr>0.0)? 1.0/(s.relErr*s.relErr*elapsed_s) : 0.0;
+    s.relErr = (mu!=0.0f)? (se/std::abs(mu)) : 0.0f;
+    s.fom = (elapsed_s>0.0f && s.relErr>0.0f)? 1.0/(s.relErr*s.relErr*elapsed_s) : 0.0f;
     return s;
 }
 
-void estimateNeutronDensity1W(const RunParams& P, const RunOutputs& R, double mixtureVolume_m3, double meanNuBar) {
-    const double Ef = 200.0e6 * 1.602176634e-19;
-    const double P_w = 1.0;
-    const double Fdot = P_w / Ef;
-    const double Qn   = Fdot * meanNuBar;
-    double sumTime = 0.0;
-    for (double x : R.T.cfe_global_time) sumTime += x;
-    const double Nhist = double(P.historiesPerBatch) * double(P.batches);
-    const double tau_per_hist = (Nhist>0)? (sumTime/Nhist) : 0.0;
-    const double N_neutrons = Qn * tau_per_hist;
-    const double n_density  = (mixtureVolume_m3>0.0)? (N_neutrons / mixtureVolume_m3) : 0.0;
+void estimateNeutronDensity1W(const RunParams& P, const RunOutputs& R, float mixtureVolume_m3, float meanNuBar) {
+    const float Ef = 200.0e6 * 1.602176634e-19;
+    const float P_w = 1.0;
+    const float Fdot = P_w / Ef;
+    const float Qn   = Fdot * meanNuBar;
+    float sumTime = 0.0f;
+    for (float x : R.T.cfe_global_time) sumTime += x;
+    const float Nhist = float(P.historiesPerBatch) * float(P.batches);
+    const float tau_per_hist = (Nhist>0)? (sumTime/Nhist) : 0.0f;
+    const float N_neutrons = Qn * tau_per_hist;
+    const float n_density  = (mixtureVolume_m3>0.0f)? (N_neutrons / mixtureVolume_m3) : 0.0f;
 
     std::cout << "\n[1 W] fission rate: " << std::scientific << Fdot
               << "  neutrons emitted/s: " << Qn
@@ -174,8 +174,8 @@ void estimateNeutronDensity1W(const RunParams& P, const RunOutputs& R, double mi
 // --- BATCH FUNCTIONS ---
 
 
-double normPerBatch(const RunParams& P) {
-    return (P.historiesPerBatch>0)? (P.sourceRate / double(P.historiesPerBatch)) : 0.0;
+float normPerBatch(const RunParams& P) {
+    return (P.historiesPerBatch>0)? (P.sourceRate / float(P.historiesPerBatch)) : 0.0f;
 }
 
 std::map<std::string,int> matIndexMap(const TallyBook& T) {
@@ -189,7 +189,7 @@ int colIdx(const std::vector<int>& mts, int mt) {
 BatchMetrics buildBatchMetrics(const RunParams& P, const RunOutputs& R, const std::vector<int>& MTs) {
     const auto regs = defaultRegions();
     const auto m2i = matIndexMap(R.T);
-    const double norm = normPerBatch(P);
+    const float norm = normPerBatch(P);
     const int bN = (int)R.T.statM.size();
     BatchMetrics B;
     B.leak_nps.resize(bN,0);
@@ -215,12 +215,12 @@ BatchMetrics buildBatchMetrics(const RunParams& P, const RunOutputs& R, const st
 
     for (int b=0;b<bN;++b) {
         long long l = (b<(int)R.T.leaks.size() ? R.T.leaks[b] : 0);
-        B.leak_nps[b] = norm * double(l);
+        B.leak_nps[b] = norm * float(l);
         int absW = sum_region_analog(b, regs[0].mats);
         int absFe= sum_region_analog(b, regs[2].mats);
-        B.abs_water_nps[b] = norm * double(absW);
-        B.abs_steel_nps[b] = norm * double(absFe);
-        double tleW=0, cfeW=0;
+        B.abs_water_nps[b] = norm * float(absW);
+        B.abs_steel_nps[b] = norm * float(absFe);
+        float tleW=0, cfeW=0;
         for (const auto& name : regs[0].mats) {
             auto it = m2i.find(name); if (it==m2i.end()) continue;
             int mi = it->second;
@@ -236,7 +236,7 @@ BatchMetrics buildBatchMetrics(const RunParams& P, const RunOutputs& R, const st
 
 void printFoms(const RunParams& P, const RunOutputs& R, const std::vector<int>& MTs, const std::string& tag) {
     const auto B = buildBatchMetrics(P, R, MTs);
-    auto pr = [&](const char* name, const std::vector<double>& x) {
+    auto pr = [&](const char* name, const std::vector<float>& x) {
         auto st = statsFromBatches(x, R.perf.elapsed_s);
         std::cout << std::left << std::setw(20) << name
                   << " mean=" << std::scientific << st.mean
@@ -277,10 +277,10 @@ Mesh3D makeMeshFromUniverse(const Universe& U, int nx,int ny,int nz) {
     return M;
 }
 
-void accumulateByRegion(const TallyBook& T, const StatsOut& S, std::map<std::string,int>& name2idx, std::vector<double>& analogColl, std::vector<double>& analogAbs) {
+void accumulateByRegion(const TallyBook& T, const StatsOut& S, std::map<std::string,int>& name2idx, std::vector<float>& analogColl, std::vector<float>& analogAbs) {
     const auto regs = defaultRegions();
-    analogColl.assign(regs.size(), 0.0);
-    analogAbs.assign(regs.size(), 0.0);
+    analogColl.assign(regs.size(), 0.0f);
+    analogAbs.assign(regs.size(), 0.0f);
     auto findCol = [&](int mt)->int {
         std::map<int,int> col;
         if (col.empty()) {
@@ -294,10 +294,10 @@ void accumulateByRegion(const TallyBook& T, const StatsOut& S, std::map<std::str
             auto it = name2idx.find(mname);
             if (it==name2idx.end()) continue;
             int i = it->second; if (i<0 || i>=M) continue;
-            double tot = 0.0;
+            float tot = 0.0f;
             for (int mt : {2,4,18,102}) { int j=findCol(mt); if (j>=0 && j<(int)S.sum[i].size()) tot += S.sum[i][j]; }
             analogColl[r] += tot;
-            double abs = 0.0;
+            float abs = 0.0f;
             int jc = findCol(102); if (jc>=0) abs += S.sum[i][jc];
             int jf = findCol(18);  if (jf>=0) abs += S.sum[i][jf];
             analogAbs[r] += abs;
@@ -306,16 +306,16 @@ void accumulateByRegion(const TallyBook& T, const StatsOut& S, std::map<std::str
 }
 
 void printAndStoreRates(const RunParams& P, const RunOutputs& R, const StatsOut& S, const std::string& tag) {
-    const double srcRate = P.sourceRate;
-    const double Nhist   = double(P.historiesPerBatch) * double(P.batches);
-    const double norm    = (Nhist>0)? (srcRate/Nhist) : 0.0;
+    const float srcRate = P.sourceRate;
+    const float Nhist   = float(P.historiesPerBatch) * float(P.batches);
+    const float norm    = (Nhist>0)? (srcRate/Nhist) : 0.0f;
     std::map<std::string,int> m2i;
     for (int i=0;i<(int)R.T.matNames.size();++i) m2i[R.T.matNames[i]] = i;
     const auto regs = defaultRegions();
-    std::vector<double> analogColl, analogAbs;
+    std::vector<float> analogColl, analogAbs;
     accumulateByRegion(R.T, S, m2i, analogColl, analogAbs);
-    std::vector<double> cfeColl(regs.size(),0.0), cfeAbs(regs.size(),0.0),
-                        tleColl(regs.size(),0.0), tleAbs(regs.size(),0.0);
+    std::vector<float> cfeColl(regs.size(),0.0f), cfeAbs(regs.size(),0.0f),
+                        tleColl(regs.size(),0.0f), tleAbs(regs.size(),0.0f);
 
     for (size_t b=0;b<R.T.cfe_Rtot.size();++b) {
         for (size_t r=0;r<regs.size();++r) {
@@ -333,10 +333,10 @@ void printAndStoreRates(const RunParams& P, const RunOutputs& R, const StatsOut&
     }
     long long leakCounts = 0;
     for (int x : R.T.leaks) leakCounts += x;
-    const double leakRate = norm * double(leakCounts);
+    const float leakRate = norm * float(leakCounts);
     std::cout << "\n=== Rates normalized to " << std::scientific << srcRate << " n/s (" << tag << ") ===\n";
     std::cout << "Total leak rate [n/s]: " << leakRate << "\n";
-    auto prRow = [&](const char* label, double aC, double aA, double cC, double cA, double tC, double tA) {
+    auto prRow = [&](const char* label, float aC, float aA, float cC, float cA, float tC, float tA) {
         std::cout << std::left << std::setw(12) << label
                   << " analog Coll: " << std::scientific << aC*norm
                   << "  analog Abs: " << aA*norm
@@ -360,15 +360,15 @@ void printAndStoreRates(const RunParams& P, const RunOutputs& R, const StatsOut&
     os2 << "leak_rate_n_per_s\n" << leakRate << "\n";
 }
 
-void tallyTrackToMesh(const Mesh3D& M, vector<double>& dst, const array<double,3>& p0, const array<double,3>& dHat, double segLen, double weightPerLength) {
+void tallyTrackToMesh(const Mesh3D& M, vector<float>& dst, const array<float,3>& p0, const array<float,3>& dHat, float segLen, float weightPerLength) {
     if (dst.empty() || segLen<=0) return;
-    const array<double,3> p1 = add3(p0, scaleByC(dHat, segLen));
-    array<double,3> t0={0,0,0}, t1={segLen,segLen,segLen};
-    array<double,3> inv = { dHat[0]!=0?1.0/dHat[0]:1e300, dHat[1]!=0?1.0/dHat[1]:1e300, dHat[2]!=0?1.0/dHat[2]:1e300 };
-    double tmin=0.0, tmax=segLen;
-    auto clipAxis=[&](int a, double minv, double maxv) {
-        double tA = (minv - p0[a]) * inv[a];
-        double tB = (maxv - p0[a]) * inv[a];
+    const array<float,3> p1 = add3(p0, scaleByC(dHat, segLen));
+    array<float,3> t0={0,0,0}, t1={segLen,segLen,segLen};
+    array<float,3> inv = { dHat[0]!=0?1.0/dHat[0]:1e300, dHat[1]!=0?1.0/dHat[1]:1e300, dHat[2]!=0?1.0/dHat[2]:1e300 };
+    float tmin=0.0f, tmax=segLen;
+    auto clipAxis=[&](int a, float minv, float maxv) {
+        float tA = (minv - p0[a]) * inv[a];
+        float tB = (maxv - p0[a]) * inv[a];
         if (tA>tB) std::swap(tA,tB);
         tmin = std::max(tmin, tA);
         tmax = std::min(tmax, tB);
@@ -377,8 +377,8 @@ void tallyTrackToMesh(const Mesh3D& M, vector<double>& dst, const array<double,3
     if (tmax<=tmin) return;
 
     auto clampi=[&](int i,int n) { return std::min(std::max(i,0), n-1); };
-    const double dx=(M.pmax[0]-M.pmin[0])/M.nx, dy=(M.pmax[1]-M.pmin[1])/M.ny, dz=(M.pmax[2]-M.pmin[2])/M.nz;
-    array<double,3> p = add3(p0, scaleByC(dHat, tmin));
+    const float dx=(M.pmax[0]-M.pmin[0])/M.nx, dy=(M.pmax[1]-M.pmin[1])/M.ny, dz=(M.pmax[2]-M.pmin[2])/M.nz;
+    array<float,3> p = add3(p0, scaleByC(dHat, tmin));
     int i = clampi(int((p[0]-M.pmin[0])/dx), M.nx);
     int j = clampi(int((p[1]-M.pmin[1])/dy), M.ny);
     int k = clampi(int((p[2]-M.pmin[2])/dz), M.nz);
@@ -386,21 +386,21 @@ void tallyTrackToMesh(const Mesh3D& M, vector<double>& dst, const array<double,3
     int stepY = (dHat[1]>0)?+1: (dHat[1]<0?-1:0);
     int stepZ = (dHat[2]>0)?+1: (dHat[2]<0?-1:0);
 
-    double nextX = (stepX>0)? (M.pmin[0] + (i+1)*dx) : (M.pmin[0] + i*dx);
-    double nextY = (stepY>0)? (M.pmin[1] + (j+1)*dy) : (M.pmin[1] + j*dy);
-    double nextZ = (stepZ>0)? (M.pmin[2] + (k+1)*dz) : (M.pmin[2] + k*dz);
+    float nextX = (stepX>0)? (M.pmin[0] + (i+1)*dx) : (M.pmin[0] + i*dx);
+    float nextY = (stepY>0)? (M.pmin[1] + (j+1)*dy) : (M.pmin[1] + j*dy);
+    float nextZ = (stepZ>0)? (M.pmin[2] + (k+1)*dz) : (M.pmin[2] + k*dz);
 
-    double t = tmin;
-    double tMaxX = (stepX==0)? 1e300 : (nextX - p[0]) * inv[0];
-    double tMaxY = (stepY==0)? 1e300 : (nextY - p[1]) * inv[1];
-    double tMaxZ = (stepZ==0)? 1e300 : (nextZ - p[2]) * inv[2];
-    const double tDeltaX = (stepX==0)? 1e300 : std::abs(dx * inv[0]);
-    const double tDeltaY = (stepY==0)? 1e300 : std::abs(dy * inv[1]);
-    const double tDeltaZ = (stepZ==0)? 1e300 : std::abs(dz * inv[2]);
+    float t = tmin;
+    float tMaxX = (stepX==0)? 1e300 : (nextX - p[0]) * inv[0];
+    float tMaxY = (stepY==0)? 1e300 : (nextY - p[1]) * inv[1];
+    float tMaxZ = (stepZ==0)? 1e300 : (nextZ - p[2]) * inv[2];
+    const float tDeltaX = (stepX==0)? 1e300 : std::abs(dx * inv[0]);
+    const float tDeltaY = (stepY==0)? 1e300 : std::abs(dy * inv[1]);
+    const float tDeltaZ = (stepZ==0)? 1e300 : std::abs(dz * inv[2]);
 
     while (t < tmax && i>=0 && j>=0 && k>=0 && i<M.nx && j<M.ny && k<M.nz) {
-        double tNext = std::min({tMaxX, tMaxY, tMaxZ, tmax});
-        double seg = std::max(0.0, tNext - t);
+        float tNext = std::min({tMaxX, tMaxY, tMaxZ, tmax});
+        float seg = std::max(0.0f, tNext - t);
         if (seg>0) {
             dst[M.idx(i,j,k)] += weightPerLength * seg;
         }
@@ -412,9 +412,9 @@ void tallyTrackToMesh(const Mesh3D& M, vector<double>& dst, const array<double,3
     }
 }
 
-int vindex(const Mesh3D& M, double x, double y, double z) {
-    auto toI = [&](double X, double a, double b, int n) {
-        const double t = (X - a) / (b - a);
+int vindex(const Mesh3D& M, float x, float y, float z) {
+    auto toI = [&](float X, float a, float b, int n) {
+        const float t = (X - a) / (b - a);
         int i = (int)std::floor(t * n);
         if (i < 0) i = 0;
         if (i >= n) i = n - 1;
@@ -426,41 +426,42 @@ int vindex(const Mesh3D& M, double x, double y, double z) {
     return (iz * M.ny + iy) * M.nx + ix;
 }
 
-void scoreCFE(TallyBook& T, int batch, const array<double,3>& pos, double E, double SigmaRef) {
+void scoreCFE(TallyBook& T, int batch, const array<float,3>& pos, float E, float SigmaRef) {
     if (!T.mesh || !T.useCFE) return;
     if (!T.mesh->inside(pos)) return;
-    const double v = neutronSpeed(E); if (v<=0 || SigmaRef<=0) return;
+    const float v = neutronSpeed(E); if (v<=0 || SigmaRef<=0) return;
     const int nx=T.mesh->nx, ny=T.mesh->ny, nz=T.mesh->nz;
-    const double dx=(T.mesh->pmax[0]-T.mesh->pmin[0])/nx;
-    const double dy=(T.mesh->pmax[1]-T.mesh->pmin[1])/ny;
-    const double dz=(T.mesh->pmax[2]-T.mesh->pmin[2])/nz;
+    const float dx=(T.mesh->pmax[0]-T.mesh->pmin[0])/nx;
+    const float dy=(T.mesh->pmax[1]-T.mesh->pmin[1])/ny;
+    const float dz=(T.mesh->pmax[2]-T.mesh->pmin[2])/nz;
     int i = std::min(std::max(int((pos[0]-T.mesh->pmin[0])/dx),0), nx-1);
     int j = std::min(std::max(int((pos[1]-T.mesh->pmin[1])/dy),0), ny-1);
     int k = std::min(std::max(int((pos[2]-T.mesh->pmin[2])/dz),0), nz-1);
     T.mesh->cfe_density[T.mesh->idx(i,j,k)] += 1.0/(v*SigmaRef);
 }
 
-double microXS(const Material& m, int mt, double E) {
-    auto it = m.mt.find(mt);
-    return (it==m.mt.end()) ? 0.0 : valueInterp(it->second, E);
+float microXS(const Material& m, int mt, float E) {
+    if (!m.nuc) return 0.0f;
+    auto it = m.nuc->mt.find(mt);
+    return (it==m.nuc->mt.end()) ? 0.0f : valueInterp(it->second, E);
 }
 
-double macroXSComp(const Material& m, int mt, double E) {
+float macroXSComp(const Material& m, int mt, float E) {
     return m.rho * m.proportion * microXS(m, mt, E);
 }
 
-double macroXSCompTotal(const Material& m, double E, const std::vector<int>& mts_total) {
-    double s=0.0; for(int mt: mts_total) s += macroXSComp(m, mt, E); return s;
+float macroXSCompTotal(const Material& m, float E, const std::vector<int>& mts_total) {
+    float s=0.0f; for(int mt: mts_total) s += macroXSComp(m, mt, E); return s;
 }
 
-double macroXSCompAbs(const Material& m, double E) {
+float macroXSCompAbs(const Material& m, float E) {
     return macroXSComp(m, 102, E) + macroXSComp(m, 18, E);
 }
 
-void scoreCFERxPerMaterial(TallyBook& T, int batch, int mi, const Material& m, double E, const std::vector<int>& mts_total, double SigmaRef) {
-    if (SigmaRef <= 0.0) return;
-    const double Stot = macroXSCompTotal(m, E, mts_total);
-    const double Sabs = macroXSCompAbs(m, E);
+void scoreCFERxPerMaterial(TallyBook& T, int batch, int mi, const Material& m, float E, const std::vector<int>& mts_total, float SigmaRef) {
+    if (SigmaRef <= 0.0f) return;
+    const float Stot = macroXSCompTotal(m, E, mts_total);
+    const float Sabs = macroXSCompAbs(m, E);
     const int mit = T.matIndex(m);
     if (mit >= 0) {
         T.ensureBatchAll(batch, (int)T.matNames.size());
@@ -469,27 +470,27 @@ void scoreCFERxPerMaterial(TallyBook& T, int batch, int mi, const Material& m, d
     }
 }
 
-void scoreTLESegmentPerGeom(TallyBook& T, int batch, const Geometry& g0, double E, double segLen, const std::vector<int>& mts_total) {
-    if (segLen <= 0.0) return;
+void scoreTLESegmentPerGeom(TallyBook& T, int batch, const Geometry& g0, float E, float segLen, const std::vector<int>& mts_total) {
+    if (segLen <= 0.0f) return;
     T.ensureBatchAll(batch, (int)T.matNames.size());
 
     const bool isMixture = (g0.mats.size() > 1);
-    double Stot_mix = 0.0, Sabs_mix = 0.0;
+    float Stot_mix = 0.0f, Sabs_mix = 0.0f;
     if (isMixture) {
         for (const Material& m : g0.mats) {
             Stot_mix += macroXSCompTotal(m, E, mts_total);
             Sabs_mix += macroXSCompAbs(m, E);
         }
-        if (Stot_mix <= 0.0 && Sabs_mix <= 0.0) return;
+        if (Stot_mix <= 0.0f && Sabs_mix <= 0.0f) return;
     }
 
-    const double L = segLen * 1;
+    const float L = segLen * 1;
 
     if (!isMixture) {
         const Material& m = g0.mats[0];
         const int mi = T.matIndex(m);
-        const double Stot = macroXSCompTotal(m, E, mts_total);
-        const double Sabs = macroXSCompAbs(m, E);
+        const float Stot = macroXSCompTotal(m, E, mts_total);
+        const float Sabs = macroXSCompAbs(m, E);
         T.tle_Rtot[batch][mi] += L * Stot;
         T.tle_Rabs[batch][mi] += L * Sabs;
         return;
@@ -497,15 +498,15 @@ void scoreTLESegmentPerGeom(TallyBook& T, int batch, const Geometry& g0, double 
 
     for (const Material& m : g0.mats) {
         const int mi = T.matIndex(m);
-        const double Stot_c = macroXSCompTotal(m, E, mts_total);
-        const double Sabs_c = macroXSCompAbs(m, E);
-        if (Stot_mix > 0.0) T.tle_Rtot[batch][mi] += L * Stot_c;
-        if (Sabs_mix > 0.0) T.tle_Rabs[batch][mi] += L * Sabs_c;
+        const float Stot_c = macroXSCompTotal(m, E, mts_total);
+        const float Sabs_c = macroXSCompAbs(m, E);
+        if (Stot_mix > 0.0f) T.tle_Rtot[batch][mi] += L * Stot_c;
+        if (Sabs_mix > 0.0f) T.tle_Rabs[batch][mi] += L * Sabs_c;
     }
 }
 
-void scoreCFEDensityGlobal(TallyBook& T, int batch, double E, double SigmaRef) {
-    if (SigmaRef <= 0.0) return;
-    const double v = neutronSpeed(E);
-    if (v>0.0) { T.ensureBatchAll(batch, (int)T.matNames.size()); T.cfe_global_time[batch] += 1.0/(v*SigmaRef); }
+void scoreCFEDensityGlobal(TallyBook& T, int batch, float E, float SigmaRef) {
+    if (SigmaRef <= 0.0f) return;
+    const float v = neutronSpeed(E);
+    if (v>0.0f) { T.ensureBatchAll(batch, (int)T.matNames.size()); T.cfe_global_time[batch] += 1.0/(v*SigmaRef); }
 }

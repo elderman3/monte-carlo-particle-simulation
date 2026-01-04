@@ -1,0 +1,3 @@
+/mnt/c/Users/emaki/Documents/Code/monte-carlo-particle-simulation/mc5/build/CMakeFiles/mc.dir
+/mnt/c/Users/emaki/Documents/Code/monte-carlo-particle-simulation/mc5/build/CMakeFiles/edit_cache.dir
+/mnt/c/Users/emaki/Documents/Code/monte-carlo-particle-simulation/mc5/build/CMakeFiles/rebuild_cache.dir

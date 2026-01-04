@@ -5,7 +5,7 @@ using std::array; using std::vector;
 
 // --- GEOMETRY READ ---
 
-int addQuadric(Geometry& g, double A,double B,double C,double D,double E,double F, double G,double H,double I,double J) {
+int addQuadric(Geometry& g, float A,float B,float C,float D,float E,float F, float G,float H,float I,float J) {
     Shape s{};
     s.torus = 0;
     s.A=A; s.B=B; s.C=C; s.D=D; s.E=E; s.F=F; s.G=G; s.H=H; s.I=I; s.J=J;
@@ -13,13 +13,13 @@ int addQuadric(Geometry& g, double A,double B,double C,double D,double E,double 
     return (int)g.shapes.size()-1;
 }
 
-int addPlane(Geometry& g, double nx, double ny, double nz, double d) {
+int addPlane(Geometry& g, float nx, float ny, float nz, float d) {
     return addQuadric(g, 0,0,0, 0,0,0, nx,ny,nz, -d);
 }
 
-int addTorus(Geometry& g, double a, double b, double R) {
+int addTorus(Geometry& g, float a, float b, float R) {
     Shape s{}; s.torus = 1; s.A=a; s.B=b; s.C=R;
-    s.D=s.E=s.F=s.G=s.H=s.J=0.0;
+    s.D=s.E=s.F=s.G=s.H=s.J=0.0f;
     s.I=1; // Along z axis
     g.shapes.push_back(s);
     return (int)g.shapes.size()-1;
@@ -42,16 +42,16 @@ int intersectAll(Geometry& g, const vector<int>& leaves) {
     return cur;
 }
 // a = radius
-void createBall(double a, double b, double c, Geometry& g) {
+void createBall(float a, float b, float c, Geometry& g) {
     int si = addQuadric(g, 1,1,1, 0,0,0, 0,0,0, -a*a); // x^2 + y^2 + z^2 - a^2 <= 0
     int li = pushLeaf(g, si);
     g.nodeRoot = li;
     g.shape = 1;
 }
 // a = radius, b = height
-void createCylinder(double a, double b, double c, Geometry& g) {
-    const double r = a;
-    const double h2 = 0.5*b;
+void createCylinder(float a, float b, float c, Geometry& g) {
+    const float r = a;
+    const float h2 = 0.5*b;
 
     int s_cyl = addQuadric(g, 1,1,0, 0,0,0, 0,0,0, -r*r); // x^2 + y^2 - r^2 <= 0
     int s_top = addPlane(g, 0,0, 1, h2);
@@ -65,8 +65,8 @@ void createCylinder(double a, double b, double c, Geometry& g) {
     g.shape = 2;
 }
 // a = radius, b = height
-void createCylinderOpen(double a, double b, double c, Geometry& g) {
-    const double r = a;
+void createCylinderOpen(float a, float b, float c, Geometry& g) {
+    const float r = a;
     int si = addQuadric(g, 1,1,0, 0,0,0, 0,0,0, -r*r);
     int li = pushLeaf(g, si);
     g.nodeRoot = li;
@@ -74,15 +74,15 @@ void createCylinderOpen(double a, double b, double c, Geometry& g) {
 }
 // a < z half space
 // This becomes a general plane with transformations
-void createPlane(double a, double b, double c, Geometry& g) {
-    int s = addPlane(g, 0,0,1, (double)a);
+void createPlane(float a, float b, float c, Geometry& g) {
+    int s = addPlane(g, 0,0,1, (float)a);
     int l = pushLeaf(g, s);
     g.nodeRoot = l;
     g.shape = 4;
 }
 // side lengths a, b, c
-void createCuboid(double a, double b, double c, Geometry& g) {
-    const double hx = 0.5*a, hy = 0.5*b, hz = 0.5*c;
+void createCuboid(float a, float b, float c, Geometry& g) {
+    const float hx = 0.5*a, hy = 0.5*b, hz = 0.5*c;
 
     int sxp = addPlane(g,  1,0,0, hx);
     int sxn = addPlane(g, -1,0,0, hx);
@@ -102,8 +102,8 @@ void createCuboid(double a, double b, double c, Geometry& g) {
     g.shape = 5;
 }
 // side lengths without top or bottom
-void createCuboidOpen(double a, double b, double c, Geometry& g) {
-    const double hx = 0.5*a, hy = 0.5*b;
+void createCuboidOpen(float a, float b, float c, Geometry& g) {
+    const float hx = 0.5*a, hy = 0.5*b;
 
     int sxp = addPlane(g,  1,0,0, hx);
     int sxn = addPlane(g, -1,0,0, hx);
@@ -119,14 +119,14 @@ void createCuboidOpen(double a, double b, double c, Geometry& g) {
     g.shape = 6;
 }
 // a = side length, b = height
-void createHexPrism(double a, double b, double c, Geometry& g) {
-    const double s  = a;
-    const double rA = s * std::sqrt(3.0) * 0.5;
-    const double h2 = 0.5*b;
+void createHexPrism(float a, float b, float c, Geometry& g) {
+    const float s  = a;
+    const float rA = s * std::sqrt(3.0) * 0.5;
+    const float h2 = 0.5*b;
 
-    const double nx1=1.0, ny1=0.0;
-    const double nx2=0.5, ny2= std::sqrt(3.0)*0.5;
-    const double nx3=0.5, ny3=-std::sqrt(3.0)*0.5;
+    const float nx1=1.0, ny1=0.0f;
+    const float nx2=0.5, ny2= std::sqrt(3.0)*0.5;
+    const float nx3=0.5, ny3=-std::sqrt(3.0)*0.5;
 
     int s1p = addPlane(g,  nx1, ny1, 0, rA);
     int s1n = addPlane(g, -nx1,-ny1, 0, rA);
@@ -151,7 +151,7 @@ void createHexPrism(double a, double b, double c, Geometry& g) {
     g.shape = 7;
 }
 // A=a, B=b, C=R
-void createTorus(double a, double b, double c, Geometry& g) {
+void createTorus(float a, float b, float c, Geometry& g) {
     int st = addTorus(g, a, b, c); 
     int lt = pushLeaf(g, st);
     g.nodeRoot = lt;
